@@ -1,5 +1,6 @@
 #include "math.h"
 #include "stdio.h"
+#include "assert.h"
 
 #define M_PI 3.14159265358979323846
 constexpr float M_PI_F = ((float)(M_PI));
@@ -35,19 +36,80 @@ struct matrix3x4_t {
 
     matrix3x4_t() : m_flMatVal{NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN} {}
 
+    float* operator[](int i)
+    {
+        assert((i >= 0) && (i < 3));
+        return m_flMatVal[i];
+    }
+
     void print() const
     {
-        auto a = m_flMatVal;
+        auto m = m_flMatVal;
         // clang-format off
         printf("%g, %g, %g, %g\n%g, %g, %g, %g\n%g, %g, %g, %g",
-               a[0][0], a[0][1], a[0][2], a[0][3],
-               a[1][0], a[1][1], a[1][2], a[1][3],
-               a[2][0], a[2][1], a[2][2], a[2][3]);
+               m[0][0], m[0][1], m[0][2], m[0][3],
+               m[1][0], m[1][1], m[1][2], m[1][3],
+               m[2][0], m[2][1], m[2][2], m[2][3]);
         // clang-format on
     }
 };
 
+struct VMatrix {
+    float m[4][4];
 
-void SinCos(float rad, float* s, float* c);
-extern "C" void AngleMatrix(const QAngle* angles, matrix3x4_t* matrix);
+    VMatrix() : m{NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN} {}
+
+    inline float* operator[](int i)
+    {
+        return m[i];
+    }
+
+    void print() const
+    {
+        // clang-format off
+        printf("%g, %g, %g, %g\n%g, %g, %g, %g\n%g, %g, %g, %g\n%g, %g, %g, %g",
+               m[0][0], m[0][1], m[0][2], m[0][3],
+               m[1][0], m[1][1], m[1][2], m[1][3],
+               m[2][0], m[2][1], m[2][2], m[2][3],
+               m[3][0], m[3][1], m[3][2], m[3][3]);
+        // clang-format on
+    }
+};
+
+struct VPlane {
+    Vector n;
+    float d;
+};
+
+struct PortalPair {
+
+    struct Portal {
+        Vector pos;
+        QAngle ang;
+
+        Portal(const Vector& v, const QAngle& q) : pos{v}, ang{q} {}
+
+        // computes m_rgflCoordinateFrame
+        void CalcMatrix(matrix3x4_t* out) const;
+        // computes m_PortalSimulator.m_InternalData.Placement.vForward/vRight/vUp
+        void CalcVectors(Vector* f, Vector* r, Vector* u) const;
+        // computes m_PortalSimulator.m_InternalData.Placement.PortalPlane
+        void CalcPlane(const Vector* f, VPlane* out_plane) const;
+        // follows the logic in ShouldTeleportTouchingEntity
+        bool ShouldTeleport(const VPlane* portal_plane, const Vector* ent_center, bool check_portal_hole) const;
+
+    } p1, p2;
+
+    static void CalcTeleportMatrix(const matrix3x4_t* p1_mat, const matrix3x4_t* p2_mat, VMatrix* out, bool p1_to_p2);
+};
+
+extern "C" void __cdecl AngleMatrix(const QAngle* angles, matrix3x4_t* matrix);
 void AngleMatrix(const QAngle* angles, const Vector* position, matrix3x4_t* matrix);
+extern "C" void __cdecl AngleVectors(const QAngle* angles, Vector* f, Vector* r, Vector* u);
+extern "C" void __cdecl MatrixInverseTR(const VMatrix* src, VMatrix* dst);
+extern "C" void __cdecl Vector3DMultiply(const VMatrix* src1, const Vector* src2, Vector* dst);
+extern "C" void __cdecl VMatrix__MatrixMul(const VMatrix* lhs, const VMatrix* rhs, VMatrix* out);
+void MatrixSetIdentity(VMatrix& dst);
+void UpdatePortalTransformationMatrix(const matrix3x4_t* localToWorld,
+                                      const matrix3x4_t* remoteToWorld,
+                                      VMatrix* pMatrix);

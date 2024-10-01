@@ -1,14 +1,101 @@
+#include <cstring>
 #include "source_math.hpp"
 
-void SinCos(float rad, float* s, float* c)
+void AngleMatrix(const QAngle* angles, const Vector* position, matrix3x4_t* matrix)
 {
-    _asm
-    {
-        fld DWORD PTR [rad]
-        fsincos
-        mov edx, DWORD PTR [c]
-        mov eax, DWORD PTR [s]
-        fstp DWORD PTR [edx]
-        fstp DWORD PTR [eax]
+    AngleMatrix(angles, matrix);
+    (*matrix)[0][3] = position->x;
+    (*matrix)[1][3] = position->y;
+    (*matrix)[2][3] = position->z;
+}
+
+void MatrixSetIdentity(VMatrix& dst)
+{
+    // clang-format off
+    dst[0][0] = 1.0f; dst[0][1] = 0.0f; dst[0][2] = 0.0f; dst[0][3] = 0.0f;
+    dst[1][0] = 0.0f; dst[1][1] = 1.0f; dst[1][2] = 0.0f; dst[1][3] = 0.0f;
+    dst[2][0] = 0.0f; dst[2][1] = 0.0f; dst[2][2] = 1.0f; dst[2][3] = 0.0f;
+    dst[3][0] = 0.0f; dst[3][1] = 0.0f; dst[3][2] = 0.0f; dst[3][3] = 1.0f;
+    // clang-format on
+}
+
+void UpdatePortalTransformationMatrix(const matrix3x4_t* localToWorld,
+                                      const matrix3x4_t* remoteToWorld,
+                                      VMatrix* pMatrix)
+{
+    VMatrix matPortal1ToWorldInv, matPortal2ToWorld, matRotation;
+    MatrixInverseTR(reinterpret_cast<const VMatrix*>(localToWorld), &matPortal1ToWorldInv);
+    MatrixSetIdentity(matRotation);
+    matRotation[0][0] = -1.0f;
+    matRotation[1][1] = -1.0f;
+    memcpy(&matPortal2ToWorld, remoteToWorld, sizeof matrix3x4_t);
+    matPortal2ToWorld[3][0] = 0.0f;
+    matPortal2ToWorld[3][1] = 0.0f;
+    matPortal2ToWorld[3][2] = 0.0f;
+    matPortal2ToWorld[3][3] = 1.0f;
+    VMatrix tmp;
+    VMatrix__MatrixMul(&matPortal2ToWorld, &matRotation, &tmp);
+    VMatrix__MatrixMul(&tmp, &matPortal1ToWorldInv, pMatrix);
+}
+
+void PortalPair::Portal::CalcMatrix(matrix3x4_t* out) const
+{
+    AngleMatrix(&ang, &pos, out);
+}
+
+void PortalPair::Portal::CalcVectors(Vector* f, Vector* r, Vector* u) const
+{
+    AngleVectors(&ang, f, r, u);
+}
+
+void PortalPair::Portal::CalcPlane(const Vector* f, VPlane* out_plane) const
+{
+    out_plane->n = *f;
+    // logic for dot product is at server.dll[0x427bd5]
+    __asm {
+        FLD   dword ptr [this]Portal.pos.z
+        FMUL  dword ptr [f]Vector.z
+        FLD   dword ptr [this]Portal.pos.y
+        FMUL  dword ptr [f]Vector.y
+        FADDP ST(1), ST
+        FLD   dword ptr [this]Portal.pos.x
+        FMUL  dword ptr [f]Vector.x
+        FADDP ST(1), ST
+        FSTP  [out_plane]VPlane.d
+    }
+}
+
+bool PortalPair::Portal::ShouldTeleport(const VPlane* portal_plane,
+                                        const Vector* ent_center,
+                                        bool check_portal_hole) const
+{
+    assert(!check_portal_hole);
+    // logic for dot product is at server.dll[0x42b89e]
+    // notice that this time it does (x+y)+z instead of x+(y+z), I have no idea if this matters
+    __asm {
+        FLD    dword ptr [portal_plane]VPlane.n.x
+        FMUL   [ent_center]Vector.x
+        FLD    dword ptr [portal_plane]VPlane.n.y
+        FMUL   [ent_center]Vector.y
+        FADDP  ST(1), ST
+        FLD    [ent_center]Vector.z ; loads ESP+0x14, but that makes little sense in the disassembly, assuming ent_center.z
+        FMUL   dword ptr [portal_plane]VPlane.n.z
+        FADDP  ST(1), ST
+        FCOMP  dword ptr [portal_plane]VPlane.d
+        FNSTSW AX
+        TEST   AH, 5
+        SETZ   AL
+        MOVZX  EAX, AL
+    }
+}
+
+void PortalPair::CalcTeleportMatrix(const matrix3x4_t* p1_mat, const matrix3x4_t* p2_mat, VMatrix* out, bool p1_to_p2)
+{
+    if (p1_to_p2) {
+        UpdatePortalTransformationMatrix(p1_mat, p2_mat, out);
+    } else {
+        VMatrix p1_to_p2_mat;
+        UpdatePortalTransformationMatrix(p1_mat, p2_mat, &p1_to_p2_mat);
+        MatrixInverseTR(&p1_to_p2_mat, out);
     }
 }
