@@ -1,6 +1,10 @@
-#include "stdio.h"
+#include <iostream>
+#include "source_math.hpp"
 
 int main()
 {
-    printf("AAGGGHH");
+    QAngle q{0, 0, 0};
+    matrix3x4_t m;
+    AngleMatrix(&q, &m);
+    m.print();
 }
