@@ -1,3 +1,5 @@
+#include <chrono>
+
 #include "../../catch/src/catch_amalgamated.hpp"
 #include "source_math.hpp"
 
@@ -8,7 +10,14 @@ int main(int argc, char* argv[])
     Catch::Session session;
     session.libIdentify();
     session.configData().rngSeed = CATCH_SEED;
-    return session.run(argc, argv);
+
+    using namespace std::chrono;
+    auto t = high_resolution_clock::now();
+    int ret = session.run(argc, argv);
+    if (ret == 0) {
+        auto td = duration_cast<duration<double>>(high_resolution_clock::now() - t);
+        printf("Tests completed after %.3fs\n", td.count());
+    }
 }
 
 static Catch::Generators::RandomFloatingGenerator<float> posGen{-8000.f, 8000.f, CATCH_SEED};

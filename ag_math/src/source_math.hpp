@@ -7,10 +7,18 @@ constexpr float M_PI_F = ((float)(M_PI));
 constexpr float _DEG2RAD_MUL = (float)(M_PI_F / 180.f);
 // #define DEG2RAD(x) ((float)(x) * _DEG2RAD_MUL)
 
+#ifdef _DEBUG
+#define DEBUG_NAN_CTORS
+#endif
+
 struct Vector {
     float x, y, z;
 
+#ifdef DEBUG_NAN_CTORS
     Vector() : x{NAN}, y{NAN}, z{NAN} {}
+#else
+    Vector() {}
+#endif
     Vector(float x, float y, float z) : x{x}, y{y}, z{z} {}
 
     void print() const
@@ -53,7 +61,11 @@ struct Vector {
 struct QAngle {
     float x, y, z;
 
+#ifdef DEBUG_NAN_CTORS
     QAngle() : x{NAN}, y{NAN}, z{NAN} {}
+#else
+    QAngle() {}
+#endif
     QAngle(float x, float y, float z) : x{x}, y{y}, z{z} {}
 
     void print() const
@@ -65,7 +77,11 @@ struct QAngle {
 struct matrix3x4_t {
     float m_flMatVal[3][4];
 
+#ifdef DEBUG_NAN_CTORS
     matrix3x4_t() : m_flMatVal{NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN} {}
+#else
+    matrix3x4_t() {}
+#endif
 
     float* operator[](int i)
     {
@@ -88,7 +104,11 @@ struct matrix3x4_t {
 struct VMatrix {
     float m[4][4];
 
+#ifdef DEBUG_NAN_CTORS
     VMatrix() : m{NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN} {}
+#else
+    VMatrix() {}
+#endif
 
     inline float* operator[](int i)
     {
@@ -111,7 +131,11 @@ struct VPlane {
     Vector n;
     float d;
 
+#ifdef DEBUG_NAN_CTORS
     VPlane() : n{}, d{NAN} {}
+#else
+    VPlane() {}
+#endif
     VPlane(const Vector& n, float d) : n{n}, d{d} {}
 
     void print() const
