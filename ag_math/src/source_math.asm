@@ -1,12 +1,45 @@
 .686
 .model flat, C
 
+Vector STRUCT
+    x DWORD ?
+    y DWORD ?
+    z DWORD ?
+Vector ENDS
+
+VPlane STRUCT
+    n Vector <>
+    d DWORD ?
+VPlane ENDS
+
 .const
 
-PI_F REAL4 3.1415927
 DEG2RAD_MUL_F REAL4 0.01745329 ; float(PI/180)
+NEG1_F REAL4 -1.0
 
 .code
+
+; Some functions that I'm copying are __thiscall but MSVC doesn't allow declaring functions as
+; __thiscall, so the usual trick around this is to declare it as __fastcall(this, dummy_edx, ...).
+; I couldn't figure out how to link to the assembly file when declaring the function as __fastcall
+; though - seems like MSVC still wrangles the name? And using the wrangled named didn't work. The
+; workaround is to declare all the functions as __cdecl, then add a little preamble & postamble to
+; fixup the calling convention differences.
+
+; put at the very start of the function
+ThiscallToCdeclPreamble MACRO
+    POP  EAX  ; return address -> eax
+    POP  ECX  ; last param on stack -> this
+    PUSH EAX  ; eax -> return address
+ENDM
+
+; replace any RET instructions with this
+ThiscallToCdeclPostamble MACRO
+    POP EAX   ; return address -> eax
+    PUSH ECX  ; this -> last param on stack
+    PUSH EAX  ; eax -> return address
+    RET       ; caller cleans up stack
+ENDM
 
 ; void AngleMatrix(const QAngle* angles, matrix3x4_t* matrix) : server.dll[0x451670]
 AngleMatrix PROC PUBLIC
@@ -126,7 +159,7 @@ AngleVectors PROC PUBLIC
     FSTP dword ptr [EAX]
     FLD dword ptr [ECX]
     LEA EDX, [ESP + 8]
-    FMUL dword ptr DS:[4D0F5Ch]
+    FMUL dword ptr DS:[DEG2RAD_MUL_F]
     LEA EAX, [ESP + 24h]
     MOV [ESP + 18h], EDX
     MOV [ESP + 1Ch], EAX
@@ -182,7 +215,7 @@ no_f:
     FSTP dword ptr [EAX]
     FLD ST(1)
     FMUL ST, ST(6)
-    FLD dword ptr DS:[DEG2RAD_MUL_F]
+    FLD dword ptr DS:[NEG1_F]
     FMUL ST(1), ST
     FXCH ST(4)
     FMUL ST, ST(6)
@@ -347,13 +380,8 @@ Vector3DMultiply ENDP
 ; __cdecl VMatrix__MatrixMul(const VMatrix* lhs, const VMatrix* rhs, VMatrix* out)
 ; This is our implementation of VMatrix::MatrixMul : server.dll[0x454e30],
 ; called by VMatrix::operator* : server.dll[0x4550a0].
-; 
-; One small problem: I would like to do the __fastcall trick to call this function (it's actually
-; __thiscall). But for some reason I can't figure out how to link the function when I declare it
-; as __fastcall. So it's declared as __cdecl, and we move the parameters around to change them to
-; the __thiscall calling convention.
 VMatrix__MatrixMul PROC PUBLIC
-    POP ECX ; this is the only fix we need to do lmao
+    ThiscallToCdeclPreamble
 
     SUB ESP, 20h
     MOV EAX, [ESP + 24h]
@@ -572,7 +600,109 @@ VMatrix__MatrixMul PROC PUBLIC
     FLD dword ptr [ESP + 1Ch]
     FSTP dword ptr [EAX + 3Ch]
     ADD ESP, 20h
-    RET 8
+
+    ThiscallToCdeclPostamble
 VMatrix__MatrixMul ENDP
+
+; Vector VMatrix::operator*(Vector) : server.dll[0x3fe020]
+; Same hack as above - function is actually __thiscall but we implement:
+; Vector* __cdecl VMatrix__operatorVec(const VMatrix* lhs, Vector* out, const Vector* vVec)
+VMatrix__operatorVec PROC PUBLIC
+    ThiscallToCdeclPreamble
+
+    MOV EDX, [ESP + 8]
+    FLD dword ptr [ECX + 4]
+    FMUL dword ptr [EDX + 4]
+    MOV EAX, [ESP + 4]
+    FLD dword ptr [ECX + 8]
+    FMUL dword ptr [EDX + 8]
+    FADDP
+    FLD dword ptr [EDX]
+    FMUL dword ptr [ECX]
+    FADDP
+    FADD dword ptr [ECX + 0Ch]
+    FSTP dword ptr [EAX]
+    FLD dword ptr [ECX + 14h]
+    FMUL dword ptr [EDX + 4]
+    FLD dword ptr [ECX + 10h]
+    FMUL dword ptr [EDX]
+    FADDP
+    FLD dword ptr [ECX + 18h]
+    FMUL dword ptr [EDX + 8]
+    FADDP
+    FADD dword ptr [ECX + 1Ch]
+    FSTP dword ptr [EAX + 4]
+    FLD dword ptr [ECX + 24h]
+    FMUL dword ptr [EDX + 4]
+    FLD dword ptr [ECX + 20h]
+    FMUL dword ptr [EDX]
+    FADDP
+    FLD dword ptr [ECX + 28h]
+    FMUL dword ptr [EDX + 8]
+    FADDP
+    FADD dword ptr [ECX + 2Ch]
+    FSTP dword ptr [EAX + 8]
+
+    ThiscallToCdeclPostamble
+VMatrix__operatorVec ENDP
+
+; This is not a copied function - it is hand-written. It is meant to closely follow the logic for
+; calculating m_PortalSimulator.m_InternalData.Placement.PortalPlane in CPortalSimulator::MoveTo().
+; I tried to write inline asm in a member function but that produced some really weird assembly -
+; MSVC was doing something really weird to my code which is why I wrote this by hand.
+; The declaration looks like this:
+; void __cdecl Portal_CalcPlane(const Vector* portal_pos, const Vector* portal_f, VPlane* out_plane)
+Portal_CalcPlane PROC PUBLIC
+    MOV ECX, dword ptr [ESP + 04h] ; portal_pos
+    MOV EAX, dword ptr [ESP + 08h] ; portal_f
+    MOV EDX, dword ptr [ESP + 0Ch] ; out_plane
+
+    ; out_plane.n = *portal_f
+    FLD  dword ptr [EAX + Vector.x]
+    FSTP dword ptr [EDX + VPlane.n.x]
+    FLD  dword ptr [EAX + Vector.y]
+    FSTP dword ptr [EDX + VPlane.n.y]
+    FLD  dword ptr [EAX + Vector.z]
+    FSTP dword ptr [EDX + VPlane.n.z]
+
+    ; logic for dot product is at server.dll[0x427bd5], order is (z+y)+x -> plane.d
+    FLD   dword ptr [ECX + Vector.z]
+    FMUL  dword ptr [EAX + Vector.z]
+    FLD   dword ptr [ECX + Vector.y]
+    FMUL  dword ptr [EAX + Vector.y]
+    FADDP ST(1), ST
+    FLD   dword ptr [ECX + Vector.x]
+    FMUL  dword ptr [EAX + Vector.x]
+    FADDP ST(1), ST
+    FSTP  dword ptr [EDX + VPlane.d]
+
+    RET
+Portal_CalcPlane ENDP
+
+; Another hand-written function. Meant to closely follow the logic for checking if an entity is
+; behind the plane of a portal in CProp_Portal::ShouldTeleportTouchingEntity(). Declaration:
+; bool __cdecl Portal_EntBehindPlane(const VPlane* portal_plane, const Vector* ent_center)
+Portal_EntBehindPlane PROC PUBLIC
+    MOV ECX, dword ptr [ESP + 4] ; portal_plane
+    MOV EDX, dword ptr [ESP + 8] ; ent_center
+
+    ; logic is at server.dll[0x42b89e]
+    ; dot product is calculated as (x+y)+z this time
+    FLD    dword ptr [ECX + VPlane.n.x]
+    FMUL   [EDX + Vector.x]
+    FLD    dword ptr [ECX + VPlane.n.y]
+    FMUL   [EDX + Vector.y]
+    FADDP  ST(1), ST
+    ; the game assembly here loads ESP+0x14 but that makes no sense to me; assuming ent_center.z
+    FLD    [EDX + Vector.z]
+    FMUL   dword ptr [ECX + VPlane.n.z]
+    FADDP  ST(1), ST
+    FCOMP  dword ptr [ECX + VPlane.d]
+    FNSTSW AX
+    TEST   AH, 5
+    SETNZ  AL
+    MOVZX  EAX, AL
+    RET
+Portal_EntBehindPlane ENDP
 
 END

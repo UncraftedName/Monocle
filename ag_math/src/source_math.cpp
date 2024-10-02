@@ -50,19 +50,7 @@ void PortalPair::Portal::CalcVectors(Vector* f, Vector* r, Vector* u) const
 
 void PortalPair::Portal::CalcPlane(const Vector* f, VPlane* out_plane) const
 {
-    out_plane->n = *f;
-    // logic for dot product is at server.dll[0x427bd5]
-    __asm {
-        FLD   dword ptr [this]Portal.pos.z
-        FMUL  dword ptr [f]Vector.z
-        FLD   dword ptr [this]Portal.pos.y
-        FMUL  dword ptr [f]Vector.y
-        FADDP ST(1), ST
-        FLD   dword ptr [this]Portal.pos.x
-        FMUL  dword ptr [f]Vector.x
-        FADDP ST(1), ST
-        FSTP  [out_plane]VPlane.d
-    }
+    Portal_CalcPlane(&pos, f, out_plane);
 }
 
 bool PortalPair::Portal::ShouldTeleport(const VPlane* portal_plane,
@@ -70,23 +58,14 @@ bool PortalPair::Portal::ShouldTeleport(const VPlane* portal_plane,
                                         bool check_portal_hole) const
 {
     assert(!check_portal_hole);
-    // logic for dot product is at server.dll[0x42b89e]
-    // notice that this time it does (x+y)+z instead of x+(y+z), I have no idea if this matters
-    __asm {
-        FLD    dword ptr [portal_plane]VPlane.n.x
-        FMUL   [ent_center]Vector.x
-        FLD    dword ptr [portal_plane]VPlane.n.y
-        FMUL   [ent_center]Vector.y
-        FADDP  ST(1), ST
-        FLD    [ent_center]Vector.z ; loads ESP+0x14, but that makes little sense in the disassembly, assuming ent_center.z
-        FMUL   dword ptr [portal_plane]VPlane.n.z
-        FADDP  ST(1), ST
-        FCOMP  dword ptr [portal_plane]VPlane.d
-        FNSTSW AX
-        TEST   AH, 5
-        SETZ   AL
-        MOVZX  EAX, AL
-    }
+    return Portal_EntBehindPlane(portal_plane, ent_center);
+}
+
+Vector PortalPair::Portal::TeleportNonPlayerEntity(const VMatrix* mat, const Vector* pt) const
+{
+    Vector v;
+    VMatrix__operatorVec(mat, &v, pt);
+    return v;
 }
 
 void PortalPair::CalcTeleportMatrix(const matrix3x4_t* p1_mat, const matrix3x4_t* p2_mat, VMatrix* out, bool p1_to_p2)

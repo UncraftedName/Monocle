@@ -17,6 +17,32 @@ struct Vector {
     {
         printf("< %g, %g, %g >", x, y, z);
     }
+
+    Vector& operator+=(const Vector& v)
+    {
+        x += v.x;
+        y += v.y;
+        z += v.z;
+        return *this;
+    }
+
+    Vector operator+(const Vector& v) const
+    {
+        return Vector{x + v.x, y + v.y, z + v.z};
+    }
+
+    Vector& operator-=(const Vector& v)
+    {
+        x -= v.x;
+        y -= v.y;
+        z -= v.z;
+        return *this;
+    }
+
+    Vector operator-(const Vector& v) const
+    {
+        return Vector{x - v.x, y - v.y, z - v.z};
+    }
 };
 
 struct QAngle {
@@ -27,7 +53,7 @@ struct QAngle {
 
     void print() const
     {
-        printf("< %g, %g, %g >", x, y, z);
+        printf("<%g, %g, %g>", x, y, z);
     }
 };
 
@@ -79,6 +105,13 @@ struct VMatrix {
 struct VPlane {
     Vector n;
     float d;
+
+    VPlane() : n{}, d{NAN} {}
+
+    void print() const
+    {
+        printf("(f=<%g, %g, %g> D=%g)", n.x, n.y, n.z, d);
+    }
 };
 
 struct PortalPair {
@@ -97,10 +130,14 @@ struct PortalPair {
         void CalcPlane(const Vector* f, VPlane* out_plane) const;
         // follows the logic in ShouldTeleportTouchingEntity
         bool ShouldTeleport(const VPlane* portal_plane, const Vector* ent_center, bool check_portal_hole) const;
+        // TeleportTouchingEntity for a non-player entity
+        Vector TeleportNonPlayerEntity(const VMatrix* mat, const Vector* pt) const;
 
     } p1, p2;
 
-    static void CalcTeleportMatrix(const matrix3x4_t* p1_mat, const matrix3x4_t* p2_mat, VMatrix* out, bool p1_to_p2);
+    PortalPair(const Vector& v1, const QAngle& q1, const Vector& v2, const QAngle& q2) : p1{v1, q1}, p2{v2, q2} {}
+
+    void CalcTeleportMatrix(const matrix3x4_t* p1_mat, const matrix3x4_t* p2_mat, VMatrix* out, bool p1_to_p2);
 };
 
 extern "C" void __cdecl AngleMatrix(const QAngle* angles, matrix3x4_t* matrix);
@@ -109,7 +146,10 @@ extern "C" void __cdecl AngleVectors(const QAngle* angles, Vector* f, Vector* r,
 extern "C" void __cdecl MatrixInverseTR(const VMatrix* src, VMatrix* dst);
 extern "C" void __cdecl Vector3DMultiply(const VMatrix* src1, const Vector* src2, Vector* dst);
 extern "C" void __cdecl VMatrix__MatrixMul(const VMatrix* lhs, const VMatrix* rhs, VMatrix* out);
+extern "C" Vector* __cdecl VMatrix__operatorVec(const VMatrix* lhs, Vector* out, const Vector* vVec);
 void MatrixSetIdentity(VMatrix& dst);
 void UpdatePortalTransformationMatrix(const matrix3x4_t* localToWorld,
                                       const matrix3x4_t* remoteToWorld,
                                       VMatrix* pMatrix);
+extern "C" void __cdecl Portal_CalcPlane(const Vector* portal_pos, const Vector* portal_f, VPlane* out_plane);
+extern "C" bool __cdecl Portal_EntBehindPlane(const VPlane* portal_plane, const Vector* ent_center);
