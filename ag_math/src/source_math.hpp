@@ -43,6 +43,11 @@ struct Vector {
     {
         return Vector{x - v.x, y - v.y, z - v.z};
     }
+
+    Vector operator-() const
+    {
+        return Vector{-x, -y, -z};
+    }
 };
 
 struct QAngle {
@@ -107,6 +112,7 @@ struct VPlane {
     float d;
 
     VPlane() : n{}, d{NAN} {}
+    VPlane(const Vector& n, float d) : n{n}, d{d} {}
 
     void print() const
     {
@@ -114,30 +120,31 @@ struct VPlane {
     }
 };
 
+struct Portal {
+    Vector pos;
+    QAngle ang;
+
+    Portal(const Vector& v, const QAngle& q) : pos{v}, ang{q} {}
+
+    // computes m_rgflCoordinateFrame
+    void CalcMatrix(matrix3x4_t& out) const;
+    // computes m_PortalSimulator.m_InternalData.Placement.vForward/vRight/vUp
+    void CalcVectors(Vector* f, Vector* r, Vector* u) const;
+    // computes m_PortalSimulator.m_InternalData.Placement.PortalPlane
+    void CalcPlane(const Vector& f, VPlane& out_plane) const;
+    // follows the logic in ShouldTeleportTouchingEntity
+    bool ShouldTeleport(const VPlane& portal_plane, const Vector& ent_center, bool check_portal_hole) const;
+    // TeleportTouchingEntity for a non-player entity
+    Vector TeleportNonPlayerEntity(const VMatrix& mat, const Vector& pt) const;
+};
+
 struct PortalPair {
-
-    struct Portal {
-        Vector pos;
-        QAngle ang;
-
-        Portal(const Vector& v, const QAngle& q) : pos{v}, ang{q} {}
-
-        // computes m_rgflCoordinateFrame
-        void CalcMatrix(matrix3x4_t* out) const;
-        // computes m_PortalSimulator.m_InternalData.Placement.vForward/vRight/vUp
-        void CalcVectors(Vector* f, Vector* r, Vector* u) const;
-        // computes m_PortalSimulator.m_InternalData.Placement.PortalPlane
-        void CalcPlane(const Vector* f, VPlane* out_plane) const;
-        // follows the logic in ShouldTeleportTouchingEntity
-        bool ShouldTeleport(const VPlane* portal_plane, const Vector* ent_center, bool check_portal_hole) const;
-        // TeleportTouchingEntity for a non-player entity
-        Vector TeleportNonPlayerEntity(const VMatrix* mat, const Vector* pt) const;
-
-    } p1, p2;
+    Portal p1, p2;
 
     PortalPair(const Vector& v1, const QAngle& q1, const Vector& v2, const QAngle& q2) : p1{v1, q1}, p2{v2, q2} {}
+    PortalPair(const Portal& p1, const Portal& p2) : p1{p1}, p2{p2} {}
 
-    void CalcTeleportMatrix(const matrix3x4_t* p1_mat, const matrix3x4_t* p2_mat, VMatrix* out, bool p1_to_p2);
+    void CalcTeleportMatrix(const matrix3x4_t& p1_mat, const matrix3x4_t& p2_mat, VMatrix& out, bool p1_to_p2);
 };
 
 extern "C" void __cdecl AngleMatrix(const QAngle* angles, matrix3x4_t* matrix);

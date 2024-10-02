@@ -38,43 +38,41 @@ void UpdatePortalTransformationMatrix(const matrix3x4_t* localToWorld,
     VMatrix__MatrixMul(&tmp, &matPortal1ToWorldInv, pMatrix);
 }
 
-void PortalPair::Portal::CalcMatrix(matrix3x4_t* out) const
+void Portal::CalcMatrix(matrix3x4_t& out) const
 {
-    AngleMatrix(&ang, &pos, out);
+    AngleMatrix(&ang, &pos, &out);
 }
 
-void PortalPair::Portal::CalcVectors(Vector* f, Vector* r, Vector* u) const
+void Portal::CalcVectors(Vector* f, Vector* r, Vector* u) const
 {
     AngleVectors(&ang, f, r, u);
 }
 
-void PortalPair::Portal::CalcPlane(const Vector* f, VPlane* out_plane) const
+void Portal::CalcPlane(const Vector& f, VPlane& out_plane) const
 {
-    Portal_CalcPlane(&pos, f, out_plane);
+    Portal_CalcPlane(&pos, &f, &out_plane);
 }
 
-bool PortalPair::Portal::ShouldTeleport(const VPlane* portal_plane,
-                                        const Vector* ent_center,
-                                        bool check_portal_hole) const
+bool Portal::ShouldTeleport(const VPlane& portal_plane, const Vector& ent_center, bool check_portal_hole) const
 {
     assert(!check_portal_hole);
-    return Portal_EntBehindPlane(portal_plane, ent_center);
+    return Portal_EntBehindPlane(&portal_plane, &ent_center);
 }
 
-Vector PortalPair::Portal::TeleportNonPlayerEntity(const VMatrix* mat, const Vector* pt) const
+Vector Portal::TeleportNonPlayerEntity(const VMatrix& mat, const Vector& pt) const
 {
     Vector v;
-    VMatrix__operatorVec(mat, &v, pt);
+    VMatrix__operatorVec(&mat, &v, &pt);
     return v;
 }
 
-void PortalPair::CalcTeleportMatrix(const matrix3x4_t* p1_mat, const matrix3x4_t* p2_mat, VMatrix* out, bool p1_to_p2)
+void PortalPair::CalcTeleportMatrix(const matrix3x4_t& p1_mat, const matrix3x4_t& p2_mat, VMatrix& out, bool p1_to_p2)
 {
     if (p1_to_p2) {
-        UpdatePortalTransformationMatrix(p1_mat, p2_mat, out);
+        UpdatePortalTransformationMatrix(&p1_mat, &p2_mat, &out);
     } else {
         VMatrix p1_to_p2_mat;
-        UpdatePortalTransformationMatrix(p1_mat, p2_mat, &p1_to_p2_mat);
-        MatrixInverseTR(&p1_to_p2_mat, out);
+        UpdatePortalTransformationMatrix(&p1_mat, &p2_mat, &p1_to_p2_mat);
+        MatrixInverseTR(&p1_to_p2_mat, &out);
     }
 }
