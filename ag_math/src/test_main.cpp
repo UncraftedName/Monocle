@@ -2,6 +2,7 @@
 
 #include "../../catch/src/catch_amalgamated.hpp"
 #include "source_math.hpp"
+#include "vag_logic.hpp"
 
 #define CATCH_SEED ((uint32_t)42069)
 
@@ -106,3 +107,100 @@ TEST_CASE("Teleport transform behaves as expected")
         REQUIRE_THAT(d.x * d.x + d.y * d.y + d.z * d.z, Catch::Matchers::WithinAbs(0.0, 0.01));
     }
 }
+
+TEST_CASE("Nudging point towards portal plane")
+{
+    auto p = GENERATE(take(1000, PortalGenerator::make()));
+
+    Vector f, r, u;
+    p.CalcVectors(&f, &r, &u);
+    VPlane plane;
+    p.CalcPlane(f, plane);
+
+    for (int translate_mask = 0; translate_mask < 8; translate_mask++) {
+        Vector off{0.f, 0.f, 0.f};
+        if (translate_mask & 1)
+            off += r;
+        if (translate_mask & 2)
+            off += u;
+        Vector pt = p.pos + ((translate_mask & 4) ? off : -off);
+        // add a little "random" nudge
+        pt[0] += pt[0] / 100000.f;
+
+        for (int b_nudge_behind = 0; b_nudge_behind < 2; b_nudge_behind++) {
+            Vector nudged_to;
+            IntVector ulp_diff{};
+            NudgePointTowardsPortalPlane(pt, plane, &nudged_to, &ulp_diff, b_nudge_behind);
+            REQUIRE((bool)b_nudge_behind == p.ShouldTeleport(plane, nudged_to, false));
+
+            if (ulp_diff[0] || ulp_diff[1] || ulp_diff[2]) {
+                // now nudge across the portal boundary (requires an ulp diff from the previous step)
+                for (int i = 0; i < 3; i++) {
+                    if (ulp_diff[i]) {
+                        float target = nudged_to[i] + plane.n[i] * (b_nudge_behind ? 1 : -1);
+                        nudged_to[i] = std::nextafterf(nudged_to[i], target);
+                        break;
+                    }
+                }
+                REQUIRE_FALSE((bool)b_nudge_behind == p.ShouldTeleport(plane, nudged_to, false));
+            }
+        }
+    }
+}
+
+TEST_CASE("Teleport with no VAG")
+{
+    // chamber 09 - blue portal on opposite wall, bottom right corner
+    // blue portal is portal 1
+    PortalPairCache cache{
+        Vector{255.96875f, -161.01294f, 54.031242f},
+        QAngle{-0.f, 180.f, 0.f},
+        Vector{-127.96875f, -191.24300f, 182.03125f},
+        QAngle{0.f, 0.f, 0.f},
+    };
+    TpInfo info;
+    TryVag(cache, cache.p2.p.pos, false, info);
+    // TODO implement the portal hole check, this should specifically return TpResult::VAG
+    REQUIRE_FALSE(info.result == TpResult::Nothing);
+}
+
+TEST_CASE("Teleport with VAG")
+{
+    // chamber 09 - blue portal on opposite wall, bottom left corner
+    // blue portal is portal 1
+    PortalPairCache cache{
+        Vector{255.96875f, -223.96875f, 54.031242f},
+        QAngle{-0.f, 180.f, 0.f},
+        Vector{-127.96875f, -191.24300f, 182.03125f},
+        QAngle{0.f, 0.f, 0.f},
+    };
+    TpInfo info;
+    TryVag(cache, cache.p2.p.pos, false, info);
+    REQUIRE(info.result == TpResult::Nothing);
+}
+
+// TODO: set fp rounding mode and control word, get rid of the portal cache cringe
+
+/*
+* setpos -127.96875385 -191.24299622 150
+* 
+* VAG:
+SPT: There's an open orange portal with index 46 at -127.96875000 -191.21875000 182.03125000.
+SPT: There's an open blue portal with index 164 at 255.96875000 -161.00000000 54.00000000.
+
+
+NOTHING:
+
+SPT: There's an open orange portal with index 46 at -127.96875000 -191.21875000 182.03125000.
+SPT: There's an open blue portal with index 164 at 255.96875000 -223.96875000 54.00000000.
+
+RECURSIVE:
+
+
+SPT: There's an open orange portal with index 46 at -127.96875000 -191.21875000 182.03125000.
+SPT: There's an open blue portal with index 164 at 255.96875000 -161.00000000 201.96875000.
+
+
+ORANGE ANGLES: 0, 0, 0 (in theory)
+BLUE ANGLES: 0, 180.022, 0 (lol)
+*/

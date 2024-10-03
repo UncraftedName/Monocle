@@ -1,3 +1,5 @@
+#pragma once
+
 #include "math.h"
 #include "stdio.h"
 #include "assert.h"
@@ -55,6 +57,18 @@ struct Vector {
     Vector operator-() const
     {
         return Vector{-x, -y, -z};
+    }
+
+    float& Vector::operator[](int i)
+    {
+        assert(i >= 0 && i < 3);
+        return ((float*)this)[i];
+    }
+
+    float Vector::operator[](int i) const
+    {
+        assert(i >= 0 && i < 3);
+        return ((float*)this)[i];
     }
 };
 
@@ -149,6 +163,7 @@ struct Portal {
     QAngle ang;
 
     Portal(const Vector& v, const QAngle& q) : pos{v}, ang{q} {}
+    Portal() : pos{}, ang{} {}
 
     // computes m_rgflCoordinateFrame
     void CalcMatrix(matrix3x4_t& out) const;
@@ -157,18 +172,26 @@ struct Portal {
     // computes m_PortalSimulator.m_InternalData.Placement.PortalPlane
     void CalcPlane(const Vector& f, VPlane& out_plane) const;
     // follows the logic in ShouldTeleportTouchingEntity
-    bool ShouldTeleport(const VPlane& portal_plane, const Vector& ent_center, bool check_portal_hole) const;
+    static bool ShouldTeleport(const VPlane& portal_plane, const Vector& ent_center, bool check_portal_hole);
     // TeleportTouchingEntity for a non-player entity
-    Vector TeleportNonPlayerEntity(const VMatrix& mat, const Vector& pt) const;
+    static Vector TeleportNonPlayerEntity(const VMatrix& mat, const Vector& pt);
 };
 
 struct PortalPair {
+    // p1 is the one that calculates the "primary" matrix, i.e. the portal that's placed second
+    // TODO VERIFY THAT THE SECOND PLACED PORTAL IS THE PRIMARY ONE
     Portal p1, p2;
 
     PortalPair(const Vector& v1, const QAngle& q1, const Vector& v2, const QAngle& q2) : p1{v1, q1}, p2{v2, q2} {}
     PortalPair(const Portal& p1, const Portal& p2) : p1{p1}, p2{p2} {}
+    PortalPair() : p1{}, p2{} {};
 
-    void CalcTeleportMatrix(const matrix3x4_t& p1_mat, const matrix3x4_t& p2_mat, VMatrix& out, bool p1_to_p2);
+    static void CalcTeleportMatrix(const matrix3x4_t& p1_mat, const matrix3x4_t& p2_mat, VMatrix& out, bool p1_to_p2);
+
+private:
+    static void CalcPrimaryTeleportMatrix(const matrix3x4_t& localToWorld,
+                                          const matrix3x4_t& remoteToWorld,
+                                          VMatrix& pMatrix);
 };
 
 extern "C" void __cdecl AngleMatrix(const QAngle* angles, matrix3x4_t* matrix);
@@ -179,8 +202,5 @@ extern "C" void __cdecl Vector3DMultiply(const VMatrix* src1, const Vector* src2
 extern "C" void __cdecl VMatrix__MatrixMul(const VMatrix* lhs, const VMatrix* rhs, VMatrix* out);
 extern "C" Vector* __cdecl VMatrix__operatorVec(const VMatrix* lhs, Vector* out, const Vector* vVec);
 void MatrixSetIdentity(VMatrix& dst);
-void UpdatePortalTransformationMatrix(const matrix3x4_t* localToWorld,
-                                      const matrix3x4_t* remoteToWorld,
-                                      VMatrix* pMatrix);
 extern "C" void __cdecl Portal_CalcPlane(const Vector* portal_pos, const Vector* portal_f, VPlane* out_plane);
 extern "C" bool __cdecl Portal_EntBehindPlane(const VPlane* portal_plane, const Vector* ent_center);
