@@ -4,6 +4,7 @@
 #include "stdio.h"
 #include "assert.h"
 
+#define FLOAT_SPEC "%g"
 #define M_PI 3.14159265358979323846
 constexpr float M_PI_F = ((float)(M_PI));
 constexpr float _DEG2RAD_MUL = (float)(M_PI_F / 180.f);
@@ -12,6 +13,29 @@ constexpr float _DEG2RAD_MUL = (float)(M_PI_F / 180.f);
 #ifdef _DEBUG
 #define DEBUG_NAN_CTORS
 #endif
+
+template <size_t R, size_t C>
+static void PrintMatrix(const float (&arr)[R][C])
+{
+    int fmtLens[R][C]{};
+    int maxLens[C]{};
+    for (int i = 0; i < C; i++) {
+        for (int j = 0; j < R; j++) {
+            fmtLens[j][i] = snprintf(nullptr, 0, FLOAT_SPEC, arr[j][i]);
+            if (fmtLens[j][i] > maxLens[i])
+                maxLens[i] = fmtLens[j][i];
+        }
+    }
+    for (int j = 0; j < R; j++) {
+        for (int i = 0; i < C; i++) {
+            printf("%*s" FLOAT_SPEC "%s",
+                   maxLens[i] - fmtLens[j][i],
+                   "",
+                   arr[j][i],
+                   i == C - 1 ? (j == R - 1 ? "" : "\n") : ", ");
+        }
+    }
+}
 
 struct Vector {
     float x, y, z;
@@ -25,7 +49,7 @@ struct Vector {
 
     void print() const
     {
-        printf("< %g, %g, %g >", x, y, z);
+        printf("<%g, %g, %g>", x, y, z);
     }
 
     Vector& operator+=(const Vector& v)
@@ -105,13 +129,7 @@ struct matrix3x4_t {
 
     void print() const
     {
-        auto m = m_flMatVal;
-        // clang-format off
-        printf("%g, %g, %g, %g\n%g, %g, %g, %g\n%g, %g, %g, %g",
-               m[0][0], m[0][1], m[0][2], m[0][3],
-               m[1][0], m[1][1], m[1][2], m[1][3],
-               m[2][0], m[2][1], m[2][2], m[2][3]);
-        // clang-format on
+        PrintMatrix(m_flMatVal);
     }
 };
 
@@ -131,13 +149,7 @@ struct VMatrix {
 
     void print() const
     {
-        // clang-format off
-        printf("%g, %g, %g, %g\n%g, %g, %g, %g\n%g, %g, %g, %g\n%g, %g, %g, %g",
-               m[0][0], m[0][1], m[0][2], m[0][3],
-               m[1][0], m[1][1], m[1][2], m[1][3],
-               m[2][0], m[2][1], m[2][2], m[2][3],
-               m[3][0], m[3][1], m[3][2], m[3][3]);
-        // clang-format on
+        PrintMatrix(m);
     }
 };
 
@@ -154,7 +166,7 @@ struct VPlane {
 
     void print() const
     {
-        printf("(f=<%g, %g, %g> D=%g)", n.x, n.y, n.z, d);
+        printf("(n=<%g, %g, %g> d=%g)", n.x, n.y, n.z, d);
     }
 };
 
@@ -162,45 +174,57 @@ struct Portal {
     Vector pos;
     QAngle ang;
 
-    Portal(const Vector& v, const QAngle& q) : pos{v}, ang{q} {}
-    Portal() : pos{}, ang{} {}
+    Vector f, r, u;  // m_PortalSimulator.m_InternalData.Placement.vForward/vRight/vUp
+    VPlane plane;    // m_PortalSimulator.m_InternalData.Placement.PortalPlane
+    matrix3x4_t mat; // m_rgflCoordinateFrame
 
-    // computes m_rgflCoordinateFrame
-    void CalcMatrix(matrix3x4_t& out) const;
-    // computes m_PortalSimulator.m_InternalData.Placement.vForward/vRight/vUp
-    void CalcVectors(Vector* f, Vector* r, Vector* u) const;
-    // computes m_PortalSimulator.m_InternalData.Placement.PortalPlane
-    void CalcPlane(const Vector& f, VPlane& out_plane) const;
+    Portal(const Vector& v, const QAngle& q);
+
     // follows the logic in ShouldTeleportTouchingEntity
-    static bool ShouldTeleport(const VPlane& portal_plane, const Vector& ent_center, bool check_portal_hole);
-    // TeleportTouchingEntity for a non-player entity
-    static Vector TeleportNonPlayerEntity(const VMatrix& mat, const Vector& pt);
+    bool ShouldTeleport(const Vector& ent_center, bool check_portal_hole) const;
+
+    void print() const
+    {
+        printf("pos: ");
+        pos.print();
+        printf(", ang: ");
+        ang.print();
+        printf("\nf: ");
+        f.print();
+        printf("\nr: ");
+        r.print();
+        printf("\nu: ");
+        u.print();
+        printf("\nplane: ");
+        plane.print();
+        printf("\nmat:\n");
+        mat.print();
+    }
 };
 
 struct PortalPair {
     // p1 is the one that calculates the "primary" matrix, i.e. the portal that's placed second
     // TODO VERIFY THAT THE SECOND PLACED PORTAL IS THE PRIMARY ONE
-    Portal p1, p2;
+    Portal p1;
+    Portal p2;
+    VMatrix p1_to_p2, p2_to_p1;
 
-    PortalPair(const Vector& v1, const QAngle& q1, const Vector& v2, const QAngle& q2) : p1{v1, q1}, p2{v2, q2} {}
-    PortalPair(const Portal& p1, const Portal& p2) : p1{p1}, p2{p2} {}
-    PortalPair() : p1{}, p2{} {};
+    PortalPair(const Portal& p1, const Portal& p2);
+    PortalPair(const Vector& v1, const QAngle& q1, const Vector& v2, const QAngle& q2) : PortalPair{{v1, q1}, {v2, q2}}
+    {}
 
-    static void CalcTeleportMatrix(const matrix3x4_t& p1_mat, const matrix3x4_t& p2_mat, VMatrix& out, bool p1_to_p2);
+    // TeleportTouchingEntity for a non-player entity
+    Vector TeleportNonPlayerEntity(const Vector& pt, bool tp_with_p1) const;
 
-private:
-    static void CalcPrimaryTeleportMatrix(const matrix3x4_t& localToWorld,
-                                          const matrix3x4_t& remoteToWorld,
-                                          VMatrix& pMatrix);
+    void print() const
+    {
+        printf("p1:\n");
+        p1.print();
+        printf("\np2:\n");
+        p2.print();
+        printf("\np1_to_p2:\n");
+        p1_to_p2.print();
+        printf("\np2_to_p1:\n");
+        p2_to_p1.print();
+    }
 };
-
-extern "C" void __cdecl AngleMatrix(const QAngle* angles, matrix3x4_t* matrix);
-void AngleMatrix(const QAngle* angles, const Vector* position, matrix3x4_t* matrix);
-extern "C" void __cdecl AngleVectors(const QAngle* angles, Vector* f, Vector* r, Vector* u);
-extern "C" void __cdecl MatrixInverseTR(const VMatrix* src, VMatrix* dst);
-extern "C" void __cdecl Vector3DMultiply(const VMatrix* src1, const Vector* src2, Vector* dst);
-extern "C" void __cdecl VMatrix__MatrixMul(const VMatrix* lhs, const VMatrix* rhs, VMatrix* out);
-extern "C" Vector* __cdecl VMatrix__operatorVec(const VMatrix* lhs, Vector* out, const Vector* vVec);
-void MatrixSetIdentity(VMatrix& dst);
-extern "C" void __cdecl Portal_CalcPlane(const Vector* portal_pos, const Vector* portal_f, VPlane* out_plane);
-extern "C" bool __cdecl Portal_EntBehindPlane(const VPlane* portal_plane, const Vector* ent_center);
