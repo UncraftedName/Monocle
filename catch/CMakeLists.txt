@@ -1,5 +1,5 @@
 project(catch C)
-set(CMAKE_CPP_STANDARD 23)
+set(CMAKE_CXX_STANDARD 23)
 
 add_compile_definitions(CATCH_AMALGAMATED_CUSTOM_MAIN)
 

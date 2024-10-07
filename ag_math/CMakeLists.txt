@@ -1,5 +1,5 @@
 project(ag_math C ASM_MASM)
-set(CMAKE_CPP_STANDARD 23)
+set(CMAKE_CXX_STANDARD 23)
 
 include_directories(
 	src

@@ -3,6 +3,7 @@
 
 int main()
 {
+    SyncFloatingPointControlWord();
     PortalPair pp{{100, -100, 10}, {40, 50, 60}, {300, -300, 40}, {-30, -20, -10}};
     Vector pt = pp.p1.pos;
     pt -= pp.p1.f;

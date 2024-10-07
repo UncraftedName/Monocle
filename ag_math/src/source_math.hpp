@@ -1,14 +1,29 @@
 #pragma once
 
+#include <float.h>
+#include <charconv>
+
 #include "math.h"
 #include "stdio.h"
 #include "assert.h"
 
-#define FLOAT_SPEC "%g"
+#define F_TO_STR_BUF_SIZE 24
+
 #define M_PI 3.14159265358979323846
 constexpr float M_PI_F = ((float)(M_PI));
 constexpr float _DEG2RAD_MUL = (float)(M_PI_F / 180.f);
 // #define DEG2RAD(x) ((float)(x) * _DEG2RAD_MUL)
+
+inline void SyncFloatingPointControlWord()
+{
+    // 0x9001f (default msvc settings) - mask all exceptions, near rounding, 53 bit mantissa precision, projective infinity
+    errno_t err =
+        _controlfp_s(nullptr,
+                     (_EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW | _EM_ZERODIVIDE | _EM_INVALID | _EM_DENORMAL) |
+                         (_RC_NEAR | _PC_53 | _IC_PROJECTIVE),
+                     ~0);
+    assert(!err);
+}
 
 #ifdef _DEBUG
 #define DEBUG_NAN_CTORS
@@ -17,21 +32,24 @@ constexpr float _DEG2RAD_MUL = (float)(M_PI_F / 180.f);
 template <size_t R, size_t C>
 static void PrintMatrix(const float (&arr)[R][C])
 {
+    char buf[F_TO_STR_BUF_SIZE];
     int fmtLens[R][C]{};
     int maxLens[C]{};
     for (int i = 0; i < C; i++) {
         for (int j = 0; j < R; j++) {
-            fmtLens[j][i] = snprintf(nullptr, 0, FLOAT_SPEC, arr[j][i]);
+            fmtLens[j][i] = std::to_chars(buf, buf + sizeof buf, arr[j][i]).ptr - buf;
             if (fmtLens[j][i] > maxLens[i])
                 maxLens[i] = fmtLens[j][i];
         }
     }
     for (int j = 0; j < R; j++) {
         for (int i = 0; i < C; i++) {
-            printf("%*s" FLOAT_SPEC "%s",
+            auto end = std::to_chars(buf, buf + sizeof buf, arr[j][i]).ptr;
+            printf("%*s%.*s%s",
                    maxLens[i] - fmtLens[j][i],
                    "",
-                   arr[j][i],
+                   end - buf,
+                   buf,
                    i == C - 1 ? (j == R - 1 ? "" : "\n") : ", ");
         }
     }
@@ -49,7 +67,21 @@ struct Vector {
 
     void print() const
     {
-        printf("<%g, %g, %g>", x, y, z);
+        char buf[(F_TO_STR_BUF_SIZE + 2) * 3];
+        auto cur = buf;
+        auto end = buf + sizeof buf;
+
+        cur++[0] = '<';
+        cur = std::to_chars(cur, end, x).ptr;
+        cur++[0] = ',';
+        cur++[0] = ' ';
+        cur = std::to_chars(cur, end, y).ptr;
+        cur++[0] = ',';
+        cur++[0] = ' ';
+        cur = std::to_chars(cur, end, z).ptr;
+        cur++[0] = '>';
+
+        printf("%.*s", cur - buf, buf);
     }
 
     Vector& operator+=(const Vector& v)
@@ -83,13 +115,13 @@ struct Vector {
         return Vector{-x, -y, -z};
     }
 
-    float& Vector::operator[](int i)
+    float& operator[](int i)
     {
         assert(i >= 0 && i < 3);
         return ((float*)this)[i];
     }
 
-    float Vector::operator[](int i) const
+    float operator[](int i) const
     {
         assert(i >= 0 && i < 3);
         return ((float*)this)[i];
@@ -108,7 +140,7 @@ struct QAngle {
 
     void print() const
     {
-        printf("<%g, %g, %g>", x, y, z);
+        Vector{x, y, z}.print();
     }
 };
 
@@ -166,13 +198,17 @@ struct VPlane {
 
     void print() const
     {
-        printf("(n=<%g, %g, %g> d=%g)", n.x, n.y, n.z, d);
+        char buf[F_TO_STR_BUF_SIZE];
+        auto end = std::to_chars(buf, buf + sizeof buf, d).ptr;
+        printf("(n=(");
+        n.print();
+        printf("), d=%.*s", end - buf, buf);
     }
 };
 
 struct Portal {
-    Vector pos;
-    QAngle ang;
+    Vector pos; // m_vecOrigin/m_vecAbsOrigin
+    QAngle ang; // m_angAngles/m_angAbsAngles
 
     Vector f, r, u;  // m_PortalSimulator.m_InternalData.Placement.vForward/vRight/vUp
     VPlane plane;    // m_PortalSimulator.m_InternalData.Placement.PortalPlane
@@ -220,11 +256,11 @@ struct PortalPair {
     {
         printf("p1:\n");
         p1.print();
-        printf("\np2:\n");
-        p2.print();
         printf("\np1_to_p2:\n");
         p1_to_p2.print();
-        printf("\np2_to_p1:\n");
+        printf("\n\n----------------------------------------\n\np2:\n");
+        p2.print();
+        printf("\n\np2_to_p1:\n");
         p2_to_p1.print();
     }
 };

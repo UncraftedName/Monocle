@@ -8,6 +8,7 @@
 
 int main(int argc, char* argv[])
 {
+    SyncFloatingPointControlWord();
     Catch::Session session;
     session.libIdentify();
     session.configData().rngSeed = CATCH_SEED;
@@ -132,7 +133,7 @@ TEST_CASE("Nudging point towards portal plane")
 
 TEST_CASE("Teleport with VAG")
 {
-    // chamber 09 - blue portal on opposite wall, bottom right corner
+    // chamber 09 - blue portal on opposite wall, bottom left corner
     // blue portal is portal 1
     PortalPair pp{
         Vector{255.96875f, -161.01294f, 54.031242f},
@@ -149,7 +150,7 @@ TEST_CASE("Teleport with VAG")
 
 TEST_CASE("Teleport with no VAG")
 {
-    // chamber 09 - blue portal on opposite wall, bottom left corner
+    // chamber 09 - blue portal on opposite wall, bottom right corner
     // blue portal is portal 1
     PortalPair pp{
         Vector{255.96875f, -223.96875f, 54.031242f},
@@ -162,7 +163,8 @@ TEST_CASE("Teleport with no VAG")
     REQUIRE(info.result == TpResult::Nothing);
 }
 
-// TODO: set fp rounding mode and control word, get rid of the portal cache cringe
+// TODO: set fp rounding mode and control word
+// TODO: add a test for checking exact matrices/plane/vectors
 
 /*
 * setpos -127.96875385 -191.24299622 150
