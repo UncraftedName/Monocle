@@ -9,11 +9,6 @@
 
 #define F_TO_STR_BUF_SIZE 24
 
-#define M_PI 3.14159265358979323846
-constexpr float M_PI_F = ((float)(M_PI));
-constexpr float _DEG2RAD_MUL = (float)(M_PI_F / 180.f);
-// #define DEG2RAD(x) ((float)(x) * _DEG2RAD_MUL)
-
 inline void SyncFloatingPointControlWord()
 {
     // 0x9001f (default msvc settings) - mask all exceptions, near rounding, 53 bit mantissa precision, projective infinity
@@ -173,6 +168,14 @@ struct VMatrix {
 #else
     VMatrix() {}
 #endif
+    VMatrix(const Vector& x, const Vector& y, const Vector& z, const Vector& pos)
+        : m{
+              {x.x, y.x, z.x, pos.x},
+              {x.y, y.y, z.y, pos.y},
+              {x.z, y.z, z.z, pos.z},
+              {0.f, 0.f, 0.f, 1.f},
+          }
+    {}
 
     inline float* operator[](int i)
     {
@@ -206,6 +209,7 @@ struct VPlane {
     }
 };
 
+// TODO - these fields might be generated a different way if the portal loaded in?
 struct Portal {
     Vector pos; // m_vecOrigin/m_vecAbsOrigin
     QAngle ang; // m_angAngles/m_angAbsAngles
@@ -238,29 +242,105 @@ struct Portal {
     }
 };
 
-struct PortalPair {
-    // p1 is the one that calculates the "primary" matrix, i.e. the portal that's placed second
-    // TODO VERIFY THAT THE SECOND PLACED PORTAL IS THE PRIMARY ONE
-    Portal p1;
-    Portal p2;
-    VMatrix p1_to_p2, p2_to_p1;
+enum class PlacementOrder {
 
-    PortalPair(const Portal& p1, const Portal& p2);
-    PortalPair(const Vector& v1, const QAngle& q1, const Vector& v2, const QAngle& q2) : PortalPair{{v1, q1}, {v2, q2}}
+    /*
+    * Teleport matrices are calculated in UpdatePortalTeleportMatrix -> UpdatePortalTransformationMatrix.
+    * Color here is the "primary" matrix and the other is the inverse.
+    */
+    _BLUE_UPTM,
+    _ORANGE_UPTM,
+
+    // Teleport matrices are calculated in UpdateLinkMatrix; both matrices are calculated the same way.
+    _ULM,
+
+    /*
+    * Both portals are open, one of them was moved (either with portal gun or newlocation).
+    * callstack:
+    * blue NewLocation -> UpdatePortalLinkage -> UpdatePortalTeleportMatrix -> UpdatePortalTransformationMatrix
+    *                                         -> MoveTo -> UpdateLinkMatrix
+    *                                                                       -> orange UpdateLinkMatrix
+    *                  -> UpdatePortalTeleportMatrix -> UpdatePortalTransformationMatrix ***
+    */
+    ORANGE_OPEN_BLUE_NEW_LOCATION = _BLUE_UPTM,
+    BLUE_OPEN_ORANGE_NEW_LOCATION = _ORANGE_UPTM,
+
+    /*
+    * Both portals are open and you shot one or used newlocation, but its position and angles didn't change.
+    * callstack:
+    * blue NewLocation -> UpdatePortalLinkage -> UpdatePortalTeleportMatrix -> UpdatePortalTransformationMatrix
+    *                  -> UpdatePortalTeleportMatrix -> UpdatePortalTransformationMatrix ***
+    */
+    ORANGE_OPEN_BLUE_NEW_LOCATION_NO_MOVE = _BLUE_UPTM,
+    BLUE_OPEN_ORANGE_NEW_LOCATION_NO_MOVE = _ORANGE_UPTM,
+
+    /*
+    * Orange exists (closed & activated), blue is not activated and you shot blue somewhere.
+    * callstack:
+    * blue NewLocation -> UpdatePortalLinkage -> orange UpdatePortalLinkage -> UpdatePortalTransformationMatrix
+    *                                                                       -> AttachTo -> UpdateLinkMatrix
+    *                                                                                                       -> blue UpdateLinkMatrix
+    *                                         -> UpdatePortalTeleportMatrix -> UpdatePortalTransformationMatrix
+    *                                         -> MoveTo -> UpdateLinkMatrix
+    *                                                                       -> orange UpdateLinkMatrix
+    *                  -> UpdatePortalTeleportMatrix -> UpdatePortalTransformationMatrix ***
+    * 
+    * Note: during the call to blue's UpdateLinkMatrix, the simulator's position hasn't been updated yet.
+    */
+    ORANGE_WAS_CLOSED_BLUE_MOVED = _BLUE_UPTM,
+    BLUE_WAS_CLOSED_ORANGE_MOVED = _ORANGE_UPTM,
+
+    /*
+    * Orange is closed and blue did exist but was just placed.
+    * callstack:
+    * blue NewLocation -> UpdatePortalLinkage -> orange UpdatePortalLinkage -> UpdatePortalTeleportMatrix -> UpdatePortalTransformationMatrix
+    *                                         -> UpdatePortalTeleportMatrix -> UpdatePortalTransformationMatrix
+    *                                         -> MoveTo -> UpdateLinkMatrix
+    *                                                                       -> orange UpdateLinkMatrix
+    *                  -> UpdatePortalTeleportMatrix -> UpdatePortalTransformationMatrix ***
+    */
+    ORANGE_WAS_CLOSED_BLUE_CREATED = _BLUE_UPTM,
+    BLUE_WAS_CLOSED_ORANGE_CREATED = _ORANGE_UPTM,
+
+    /*
+    * Orange exists (closed & activated), blue is not activated and it opened.
+    * The callstack is the same as the created case except there's an additional input fired on the opened
+    * portal which calls UpdatePortalTransformationMatrix a couple times.
+    * *callstack might not be the same if the portal existed already? whatever, doesn't change the result.
+    */
+    ORANGE_WAS_CLOSED_BLUE_OPENED = ORANGE_WAS_CLOSED_BLUE_CREATED,
+    BLUE_WAS_CLOSED_ORANGE_OPENED = BLUE_WAS_CLOSED_ORANGE_CREATED,
+
+    AFTER_LOAD = _ULM,
+
+    COUNT,
+};
+
+struct PortalPair {
+    Portal blue, orange;
+    VMatrix b_to_o, o_to_b;
+
+    PortalPair(const Portal& blue, const Portal& orange, PlacementOrder order);
+    PortalPair(const Vector& blue_pos,
+               const QAngle& blue_ang,
+               const Vector& orange_pos,
+               const QAngle& orange_ang,
+               PlacementOrder order)
+        : PortalPair{{blue_pos, blue_ang}, {orange_pos, orange_ang}, order}
     {}
 
     // TeleportTouchingEntity for a non-player entity
-    Vector TeleportNonPlayerEntity(const Vector& pt, bool tp_with_p1) const;
+    Vector TeleportNonPlayerEntity(const Vector& pt, bool tp_from_blue) const;
 
     void print() const
     {
-        printf("p1:\n");
-        p1.print();
-        printf("\np1_to_p2:\n");
-        p1_to_p2.print();
-        printf("\n\n----------------------------------------\n\np2:\n");
-        p2.print();
-        printf("\n\np2_to_p1:\n");
-        p2_to_p1.print();
+        printf("blue:\n");
+        blue.print();
+        printf("\nmat to linked:\n");
+        b_to_o.print();
+        printf("\n\n----------------------------------------\n\norange:\n");
+        orange.print();
+        printf("\n\nmat to linked:\n");
+        o_to_b.print();
     }
 };

@@ -42,32 +42,59 @@ bool Portal::ShouldTeleport(const Vector& ent_center, bool check_portal_hole) co
     return Portal_EntBehindPlane(&plane, &ent_center);
 }
 
-PortalPair::PortalPair(const Portal& p1, const Portal& p2) : p1{p1}, p2{p2}
+PortalPair::PortalPair(const Portal& blue, const Portal& orange, PlacementOrder order) : blue{blue}, orange{orange}
 {
-    // CProp_Portal_Shared::UpdatePortalTransformationMatrix
-    VMatrix matPortal1ToWorldInv, matPortal2ToWorld, matRotation;
-    MatrixInverseTR(reinterpret_cast<const VMatrix*>(&p1.mat), &matPortal1ToWorldInv);
-    MatrixSetIdentity(matRotation);
-    matRotation[0][0] = -1.0f;
-    matRotation[1][1] = -1.0f;
-    memcpy(&matPortal2ToWorld, &p2.mat, sizeof matrix3x4_t);
-    matPortal2ToWorld[3][0] = matPortal2ToWorld[3][1] = matPortal2ToWorld[3][2] = 0.0f;
-    matPortal2ToWorld[3][3] = 1.0f;
-    VMatrix__MatrixMul(&matPortal2ToWorld, &matRotation, &p2_to_p1);
-    VMatrix__MatrixMul(&p2_to_p1, &matPortal1ToWorldInv, &p1_to_p2);
+    switch (order) {
+        case PlacementOrder::_BLUE_UPTM:
+        case PlacementOrder::_ORANGE_UPTM: {
+            bool ob = order == PlacementOrder::_BLUE_UPTM;
+            auto& p1_mat = ob ? blue.mat : orange.mat;
+            auto& p2_mat = ob ? orange.mat : blue.mat;
+            auto& p1_to_p2 = ob ? b_to_o : o_to_b;
+            auto& p2_to_p1 = ob ? o_to_b : b_to_o;
 
-    // the bit right after in CProp_Portal::UpdatePortalTeleportMatrix
-    MatrixInverseTR(&p1_to_p2, &p2_to_p1);
+            // CProp_Portal_Shared::UpdatePortalTransformationMatrix
+            VMatrix matPortal1ToWorldInv, matPortal2ToWorld, matRotation;
+            MatrixInverseTR(reinterpret_cast<const VMatrix*>(&p1_mat), &matPortal1ToWorldInv);
+            MatrixSetIdentity(matRotation);
+            matRotation[0][0] = -1.0f;
+            matRotation[1][1] = -1.0f;
+            memcpy(&matPortal2ToWorld, &p2_mat, sizeof matrix3x4_t);
+            matPortal2ToWorld[3][0] = matPortal2ToWorld[3][1] = matPortal2ToWorld[3][2] = 0.0f;
+            matPortal2ToWorld[3][3] = 1.0f;
+            VMatrix__MatrixMul(&matPortal2ToWorld, &matRotation, &p2_to_p1);
+            VMatrix__MatrixMul(&p2_to_p1, &matPortal1ToWorldInv, &p1_to_p2);
+            // the bit right after in CProp_Portal::UpdatePortalTeleportMatrix
+            MatrixInverseTR(&p1_to_p2, &p2_to_p1);
+            break;
+        }
+        case PlacementOrder::_ULM: {
+            // CPortalSimulator::UpdateLinkMatrix for both portals
+            VMatrix blue_to_world{blue.f, -blue.r, blue.u, blue.pos};
+            VMatrix orange_to_world{orange.f, -orange.r, orange.u, orange.pos};
+            for (int i = 0; i < 2; i++) {
+                auto& p_to_world = i ? blue_to_world : orange_to_world;
+                auto& other_to_world = i ? orange_to_world : blue_to_world;
+                auto& p_to_other = i ? b_to_o : o_to_b;
 
-    /*
-    * TODO: is this really the correct flow control path? Maybe the flow goes through
-    * CPortalSimulator::UpdateLinkMatrix instead?
-    */
+                VMatrix matLocalToWorldInv, matRotation, tmp;
+                MatrixInverseTR(&p_to_world, &matLocalToWorldInv);
+                MatrixSetIdentity(matRotation);
+                matRotation[0][0] = -1.0f;
+                matRotation[1][1] = -1.0f;
+                VMatrix__MatrixMul(&other_to_world, &matRotation, &tmp);
+                VMatrix__MatrixMul(&tmp, &matLocalToWorldInv, &p_to_other);
+            }
+            break;
+        }
+        default:
+            assert(0);
+    }
 }
 
-Vector PortalPair::TeleportNonPlayerEntity(const Vector& pt, bool tp_with_p1) const
+Vector PortalPair::TeleportNonPlayerEntity(const Vector& pt, bool tp_from_blue) const
 {
     Vector v;
-    VMatrix__operatorVec(tp_with_p1 ? &p1_to_p2 : &p2_to_p1, &v, &pt);
+    VMatrix__operatorVec(tp_from_blue ? &b_to_o : &o_to_b, &v, &pt);
     return v;
 }

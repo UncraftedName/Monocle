@@ -30,4 +30,4 @@ void NudgePointTowardsPortalPlane(const Vector& pt,
                                   IntVector* ulp_diff,
                                   bool nudge_behind);
 
-void TryVag(const PortalPair& pair, const Vector& pt, bool tp_from_p1, TpInfo& info_out);
+void TryVag(const PortalPair& pair, const Vector& pt, bool tp_from_blue, TpInfo& info_out);

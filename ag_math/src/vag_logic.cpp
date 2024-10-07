@@ -38,8 +38,8 @@ void NudgePointTowardsPortalPlane(const Vector& pt,
 
 void TryVag(const PortalPair& pair, const Vector& pt, bool tp_from_p1, TpInfo& info_out)
 {
-    auto& first_tp_p = tp_from_p1 ? pair.p1 : pair.p2;
-    auto& second_tp_p = tp_from_p1 ? pair.p2 : pair.p1;
+    auto& first_tp_p = tp_from_p1 ? pair.blue : pair.orange;
+    auto& second_tp_p = tp_from_p1 ? pair.orange : pair.blue;
 
     NudgePointTowardsPortalPlane(pt, first_tp_p, &info_out.tp_from, nullptr, true);
     info_out.tp_to = pair.TeleportNonPlayerEntity(info_out.tp_from, tp_from_p1);

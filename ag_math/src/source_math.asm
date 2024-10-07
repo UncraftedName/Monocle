@@ -28,16 +28,16 @@ NEG1_F REAL4 -1.0
 
 ; put at the very start of the function
 ThiscallToCdeclPreamble MACRO
-    POP  EAX  ; return address -> eax
+    POP  EDX  ; return address -> edx
     POP  ECX  ; last param on stack -> this
-    PUSH EAX  ; eax -> return address
+    PUSH EDX  ; edx -> return address
 ENDM
 
 ; replace any RET instructions with this
 ThiscallToCdeclPostamble MACRO
-    POP EAX   ; return address -> eax
+    POP  EDX  ; return address -> edx
     PUSH ECX  ; this -> last param on stack
-    PUSH EAX  ; eax -> return address
+    PUSH EDX  ; edx -> return address
     RET       ; caller cleans up stack
 ENDM
 
