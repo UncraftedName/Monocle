@@ -343,4 +343,20 @@ struct PortalPair {
         printf("\n\nmat to linked:\n");
         o_to_b.print();
     }
+
+    void print_newlocation_cmd() const
+    {
+        for (int i = 0; i < 2; i++) {
+            auto& p = i ? blue : orange;
+            printf("ent_fire %s newlocation \"", i ? "blue" : "orange");
+            for (int j = 0; j < 2; j++) {
+                const Vector& v = j ? *(Vector*)&p.ang : p.pos;
+                for (int k = 0; k < 3; k++) {
+                    char buf[F_TO_STR_BUF_SIZE];
+                    auto end = std::to_chars(buf, buf + sizeof buf, v[k]).ptr;
+                    printf("%.*s%s", end - buf, buf, j == 1 && k == 2 ? "\"\n" : " ");
+                }
+            }
+        }
+    }
 };

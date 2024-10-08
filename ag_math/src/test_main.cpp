@@ -137,6 +137,8 @@ TEST_CASE("Nudging point towards portal plane")
     }
 }
 
+// setpos -127.96875385 -191.24299622 150
+
 TEST_CASE("Teleport with VAG")
 {
     // chamber 09 - blue portal on opposite wall, bottom left corner
@@ -173,27 +175,3 @@ TEST_CASE("Teleport with no VAG")
 }
 
 // TODO: add a test for checking exact matrices/plane/vectors
-
-/*
-* setpos -127.96875385 -191.24299622 150
-* 
-* VAG:
-SPT: There's an open orange portal with index 46 at -127.96875000 -191.21875000 182.03125000.
-SPT: There's an open blue portal with index 164 at 255.96875000 -161.00000000 54.00000000.
-
-
-NOTHING:
-
-SPT: There's an open orange portal with index 46 at -127.96875000 -191.21875000 182.03125000.
-SPT: There's an open blue portal with index 164 at 255.96875000 -223.96875000 54.00000000.
-
-RECURSIVE:
-
-
-SPT: There's an open orange portal with index 46 at -127.96875000 -191.21875000 182.03125000.
-SPT: There's an open blue portal with index 164 at 255.96875000 -161.00000000 201.96875000.
-
-
-ORANGE ANGLES: 0, 0, 0 (in theory)
-BLUE ANGLES: 0, 180.022, 0 (lol)
-*/
