@@ -3,6 +3,7 @@
 #include "../../catch/src/catch_amalgamated.hpp"
 #include "source_math.hpp"
 #include "vag_logic.hpp"
+#include "prng.hpp"
 
 #define CATCH_SEED ((uint32_t)42069)
 
@@ -16,23 +17,17 @@ int main(int argc, char* argv[])
     using namespace std::chrono;
     auto t = high_resolution_clock::now();
     int ret = session.run(argc, argv);
-    if (ret == 0) {
-        auto td = duration_cast<duration<double>>(high_resolution_clock::now() - t);
-        printf("Tests completed after %.3fs\n", td.count());
-    }
+    auto td = duration_cast<duration<double>>(high_resolution_clock::now() - t);
+    printf("Tests completed after %.3fs\n", td.count());
 }
-
-static Catch::Generators::RandomFloatingGenerator<float> posGen{-8000.f, 8000.f, CATCH_SEED};
-static Catch::Generators::RandomFloatingGenerator<float> angGen{-180.f, 180.f, CATCH_SEED};
-
-#define GEN_AND_NEXT(gen) (gen.next(), gen.get())
 
 class PortalGenerator : public Catch::Generators::IGenerator<Portal> {
 
+    small_prng& rng;
     Portal cur;
 
 public:
-    PortalGenerator() : cur{{}, {}}
+    PortalGenerator(small_prng& rng) : cur{{}, {}}, rng{rng}
     {
         static_cast<void>(next());
     }
@@ -44,30 +39,33 @@ public:
 
     bool next() override
     {
+        constexpr float p_min = -8000.f, p_max = 8000.f, a_min = -180.f, a_max = 180.f;
         cur = Portal{
-            Vector{GEN_AND_NEXT(posGen), GEN_AND_NEXT(posGen), GEN_AND_NEXT(posGen)},
-            QAngle{GEN_AND_NEXT(angGen), GEN_AND_NEXT(angGen), GEN_AND_NEXT(angGen)},
+            Vector{rng.next_float(p_min, p_max), rng.next_float(p_min, p_max), rng.next_float(p_min, p_max)},
+            QAngle{rng.next_float(a_min, a_max), rng.next_float(a_min, a_max), rng.next_float(a_min, a_max)},
         };
         return true;
     }
 
-    static Catch::Generators::GeneratorWrapper<Portal> make()
+    static Catch::Generators::GeneratorWrapper<Portal> make(small_prng& rng)
     {
-        return Catch::Generators::GeneratorWrapper<Portal>(Catch::Detail::make_unique<PortalGenerator>());
+        return Catch::Generators::GeneratorWrapper<Portal>(Catch::Detail::make_unique<PortalGenerator>(rng));
     }
 };
 
 TEST_CASE("ShouldTeleport")
 {
-    auto p = GENERATE(take(10000, PortalGenerator::make()));
+    static small_prng rng;
+    auto p = GENERATE(take(10000, PortalGenerator::make(rng)));
     REQUIRE(p.ShouldTeleport(p.pos - p.f, false));
     REQUIRE_FALSE(p.ShouldTeleport(p.pos + p.f, false));
 }
 
 TEST_CASE("TeleportNonPlayerEntity")
 {
-    auto p1 = GENERATE(take(100, PortalGenerator::make()));
-    auto p2 = GENERATE(take(100, PortalGenerator::make()));
+    static small_prng rng;
+    auto p1 = GENERATE(take(100, PortalGenerator::make(rng)));
+    auto p2 = GENERATE(take(100, PortalGenerator::make(rng)));
     auto order = GENERATE_COPY(Catch::Generators::range(0, (int)PlacementOrder::COUNT));
     auto p1_teleporting = (bool)GENERATE(0, 1);
 
@@ -99,7 +97,8 @@ TEST_CASE("TeleportNonPlayerEntity")
 
 TEST_CASE("Nudging point towards portal plane")
 {
-    auto p = GENERATE(take(1000, PortalGenerator::make()));
+    static small_prng rng;
+    auto p = GENERATE(take(1000, PortalGenerator::make(rng)));
 
     for (int translate_mask = 0; translate_mask < 8; translate_mask++) {
         Vector off{0.f, 0.f, 0.f};

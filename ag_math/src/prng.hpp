@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <assert.h>
 
 /*! \class small_prng
 \brief From http://burtleburtle.net/bob/rand/smallprng.html, a not awful fast random number source.
@@ -26,7 +27,6 @@ public:
             (*this)();
     }
 
-    //! Return `value_type` of pseudo-randomness
     inline uint32_t operator()() noexcept
     {
         uint32_t e = a - rot(b, 27);
@@ -35,5 +35,23 @@ public:
         c = d + e;
         d = e + a;
         return d;
+    }
+
+    inline bool next_bool()
+    {
+        return (*this)() & (value_type)1;
+    }
+
+    // [a, b)
+    int next_int(int a, int b)
+    {
+        assert(b > a);
+        return (*this)() % (value_type)(b - a) + a;
+    }
+
+    // [a, b]
+    float next_float(float a, float b)
+    {
+        return (*this)() / static_cast<float>(UINT32_MAX) * (b - a) + a;
     }
 };
