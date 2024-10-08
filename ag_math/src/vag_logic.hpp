@@ -8,6 +8,8 @@ enum class TpResult {
     Nothing,     // normal teleport
     VAG,         // would trigger VAG
     RecursiveTp, // recursive teleport (usually results in no free edicts crash)
+
+    COUNT,
 };
 
 using IntVector = std::array<int, 3>;

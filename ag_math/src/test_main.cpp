@@ -69,7 +69,8 @@ TEST_CASE("TeleportNonPlayerEntity")
     auto order = GENERATE_COPY(Catch::Generators::range(0, (int)PlacementOrder::COUNT));
     auto p1_teleporting = (bool)GENERATE(0, 1);
 
-    PortalPair pp{p1, p2, (PlacementOrder)order};
+    PortalPair pp{p1, p2};
+    pp.CalcTpMatrices((PlacementOrder)order);
 
     for (int translate_mask = 0; translate_mask < 16; translate_mask++) {
         Vector off1{0.f, 0.f, 0.f}, off2{0.f, 0.f, 0.f};
@@ -147,8 +148,8 @@ TEST_CASE("Teleport with VAG")
         QAngle{-0.f, 180.f, 0.f},
         Vector{-127.96875f, -191.24300f, 182.03125f},
         QAngle{0.f, 0.f, 0.f},
-        PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED,
     };
+    pp.CalcTpMatrices(PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED);
     TpInfo info;
     TryVag(pp, {-127.96876f, -191.24300f, 168.f}, false, info);
     // TODO implement the portal hole check, this should specifically return TpResult::VAG
@@ -167,8 +168,8 @@ TEST_CASE("Teleport with no VAG")
         QAngle{-0.f, 180.f, 0.f},
         Vector{-127.96875f, -191.24300f, 182.03125f},
         QAngle{0.f, 0.f, 0.f},
-        PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED,
     };
+    pp.CalcTpMatrices(PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED);
     TpInfo info;
     TryVag(pp, {-127.96876f, -191.24300f, 168.f}, false, info);
     REQUIRE(info.result == TpResult::Nothing);

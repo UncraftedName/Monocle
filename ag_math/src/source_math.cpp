@@ -1,4 +1,6 @@
 #include <cstring>
+#include <cmath>
+
 #include "source_math.hpp"
 
 extern "C" void __cdecl AngleMatrix(const QAngle* angles, matrix3x4_t* matrix);
@@ -42,7 +44,7 @@ bool Portal::ShouldTeleport(const Vector& ent_center, bool check_portal_hole) co
     return Portal_EntBehindPlane(&plane, &ent_center);
 }
 
-PortalPair::PortalPair(const Portal& blue, const Portal& orange, PlacementOrder order) : blue{blue}, orange{orange}
+void PortalPair::CalcTpMatrices(PlacementOrder order)
 {
     switch (order) {
         case PlacementOrder::_BLUE_UPTM:
@@ -94,6 +96,8 @@ PortalPair::PortalPair(const Portal& blue, const Portal& orange, PlacementOrder 
 
 Vector PortalPair::TeleportNonPlayerEntity(const Vector& pt, bool tp_from_blue) const
 {
+    // you haven't called CalcTpMatrices yet!!!
+    assert(!std::isnan(b_to_o.m[3][3]) && !std::isnan(o_to_b.m[3][3]));
     Vector v;
     VMatrix__operatorVec(tp_from_blue ? &b_to_o : &o_to_b, &v, &pt);
     return v;

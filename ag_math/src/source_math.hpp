@@ -320,14 +320,13 @@ struct PortalPair {
     Portal blue, orange;
     VMatrix b_to_o, o_to_b;
 
-    PortalPair(const Portal& blue, const Portal& orange, PlacementOrder order);
-    PortalPair(const Vector& blue_pos,
-               const QAngle& blue_ang,
-               const Vector& orange_pos,
-               const QAngle& orange_ang,
-               PlacementOrder order)
-        : PortalPair{{blue_pos, blue_ang}, {orange_pos, orange_ang}, order}
+    PortalPair(const Portal& blue, const Portal& orange) : blue{blue}, orange{orange} {};
+    PortalPair(const Vector& blue_pos, const QAngle& blue_ang, const Vector& orange_pos, const QAngle& orange_ang)
+        : blue{blue_pos, blue_ang}, orange{orange_pos, orange_ang}
     {}
+
+    // sets b_to_o & o_to_b
+    void CalcTpMatrices(PlacementOrder order);
 
     // TeleportTouchingEntity for a non-player entity
     Vector TeleportNonPlayerEntity(const Vector& pt, bool tp_from_blue) const;
