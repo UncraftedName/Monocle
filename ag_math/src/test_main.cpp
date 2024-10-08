@@ -113,25 +113,19 @@ TEST_CASE("Nudging point towards portal plane")
 
         for (int b_nudge_behind = 0; b_nudge_behind < 2; b_nudge_behind++) {
             Vector nudged_to;
-            IntVector ulp_diff{};
-            NudgePointTowardsPortalPlane(pt, p, &nudged_to, &ulp_diff, b_nudge_behind);
+            VecUlpDiff ulp_diff;
+            NudgePointTowardsPortalPlane(pt, p, b_nudge_behind , & nudged_to, &ulp_diff);
             REQUIRE((bool)b_nudge_behind == p.ShouldTeleport(nudged_to, false));
-            int ulp_sign = ulp_diff[0] ? ulp_diff[0] : (ulp_diff[1] ? ulp_diff[1] : ulp_diff[2]);
             if (b_nudge_behind) {
-                REQUIRE(p.ShouldTeleport(pt, false) == (ulp_sign >= 0));
+                REQUIRE(p.ShouldTeleport(pt, false) == (ulp_diff.diff >= 0));
             } else {
-                REQUIRE(p.ShouldTeleport(pt, false) == (ulp_sign > 0));
+                REQUIRE(p.ShouldTeleport(pt, false) == (ulp_diff.diff > 0));
             }
 
-            if (ulp_diff[0] || ulp_diff[1] || ulp_diff[2]) {
+            if (ulp_diff.ax != -1) {
                 // now nudge across the portal boundary (requires an ulp diff from the previous step)
-                for (int i = 0; i < 3; i++) {
-                    if (ulp_diff[i]) {
-                        float target = nudged_to[i] + p.plane.n[i] * (b_nudge_behind ? 1 : -1);
-                        nudged_to[i] = std::nextafterf(nudged_to[i], target);
-                        break;
-                    }
-                }
+                float target = nudged_to[ulp_diff.ax] + p.plane.n[ulp_diff.ax] * (b_nudge_behind ? 1 : -1);
+                nudged_to[ulp_diff.ax] = std::nextafterf(nudged_to[ulp_diff.ax], target);
                 REQUIRE_FALSE((bool)b_nudge_behind == p.ShouldTeleport(nudged_to, false));
             }
         }

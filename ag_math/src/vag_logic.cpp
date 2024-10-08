@@ -5,9 +5,9 @@
 
 void NudgePointTowardsPortalPlane(const Vector& pt,
                                   const Portal& portal,
+                                  bool nudge_behind,
                                   Vector* nudged_to,
-                                  IntVector* ulp_diff,
-                                  bool nudge_behind)
+                                  VecUlpDiff* ulp_diff)
 {
     int nudge_axis;
     float biggest = -INFINITY;
@@ -18,7 +18,7 @@ void NudgePointTowardsPortalPlane(const Vector& pt,
         }
     }
     if (ulp_diff)
-        (*ulp_diff)[0] = (*ulp_diff)[1] = (*ulp_diff)[2] = 0;
+        ulp_diff->Reset();
 
     Vector nudged = pt;
     for (int i = 0; i < 2; i++) {
@@ -29,7 +29,7 @@ void NudgePointTowardsPortalPlane(const Vector& pt,
         while (portal.ShouldTeleport(nudged, false) ^ inv_check) {
             nudged[nudge_axis] = std::nextafterf(nudged[nudge_axis], nudge_towards);
             if (ulp_diff)
-                (*ulp_diff)[nudge_axis] += ulp_diff_incr;
+                ulp_diff->Update(nudge_axis, ulp_diff_incr);
         }
     }
     if (nudged_to)
@@ -41,9 +41,9 @@ void TryVag(const PortalPair& pair, const Vector& pt, bool tp_from_blue, TpInfo&
     auto& p1 = tp_from_blue ? pair.blue : pair.orange;
     auto& p2 = tp_from_blue ? pair.orange : pair.blue;
 
-    NudgePointTowardsPortalPlane(pt, p1, &info_out.tp_from, &info_out.ulps_for_init_pt, true);
+    NudgePointTowardsPortalPlane(pt, p1, true, &info_out.tp_from, &info_out.ulps_for_init_pt);
     info_out.tp_to = pair.TeleportNonPlayerEntity(info_out.tp_from, tp_from_blue);
-    NudgePointTowardsPortalPlane(info_out.tp_to, p2, nullptr, &info_out.ulps_from_exit, false);
+    NudgePointTowardsPortalPlane(info_out.tp_to, p2, false, nullptr, &info_out.ulps_from_exit);
 
     if (p2.ShouldTeleport(info_out.tp_to, false)) {
         Vector pt_back_to_first = pair.TeleportNonPlayerEntity(info_out.tp_to, !tp_from_blue);
