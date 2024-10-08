@@ -57,14 +57,14 @@ public:
     }
 };
 
-TEST_CASE("ShouldTeleport behaves as expected")
+TEST_CASE("ShouldTeleport")
 {
     auto p = GENERATE(take(10000, PortalGenerator::make()));
     REQUIRE(p.ShouldTeleport(p.pos - p.f, false));
     REQUIRE_FALSE(p.ShouldTeleport(p.pos + p.f, false));
 }
 
-TEST_CASE("Teleport transform behaves as expected")
+TEST_CASE("TeleportNonPlayerEntity")
 {
     auto p1 = GENERATE(take(100, PortalGenerator::make()));
     auto p2 = GENERATE(take(100, PortalGenerator::make()));
@@ -116,6 +116,12 @@ TEST_CASE("Nudging point towards portal plane")
             IntVector ulp_diff{};
             NudgePointTowardsPortalPlane(pt, p, &nudged_to, &ulp_diff, b_nudge_behind);
             REQUIRE((bool)b_nudge_behind == p.ShouldTeleport(nudged_to, false));
+            int ulp_sign = ulp_diff[0] ? ulp_diff[0] : (ulp_diff[1] ? ulp_diff[1] : ulp_diff[2]);
+            if (b_nudge_behind) {
+                REQUIRE(p.ShouldTeleport(pt, false) == (ulp_sign >= 0));
+            } else {
+                REQUIRE(p.ShouldTeleport(pt, false) == (ulp_sign > 0));
+            }
 
             if (ulp_diff[0] || ulp_diff[1] || ulp_diff[2]) {
                 // now nudge across the portal boundary (requires an ulp diff from the previous step)
@@ -142,12 +148,15 @@ TEST_CASE("Teleport with VAG")
         QAngle{0.f, 0.f, 0.f},
         PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED,
     };
-    pp.print();
     TpInfo info;
-    TryVag(pp, pp.orange.pos, false, info);
+    TryVag(pp, {-127.96876f, -191.24300f, 168.f}, false, info);
     // TODO implement the portal hole check, this should specifically return TpResult::VAG
     REQUIRE_FALSE(info.result == TpResult::Nothing);
 }
+
+/*
+* HAHA this is cursed... This placement in 09 is actually 5 teleports: 21122=2
+*/
 
 TEST_CASE("Teleport with no VAG")
 {
@@ -160,11 +169,10 @@ TEST_CASE("Teleport with no VAG")
         PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED,
     };
     TpInfo info;
-    TryVag(pp, pp.orange.pos, false, info);
+    TryVag(pp, {-127.96876f, -191.24300f, 168.f}, false, info);
     REQUIRE(info.result == TpResult::Nothing);
 }
 
-// TODO: set fp rounding mode and control word
 // TODO: add a test for checking exact matrices/plane/vectors
 
 /*

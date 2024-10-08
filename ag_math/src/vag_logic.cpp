@@ -36,18 +36,18 @@ void NudgePointTowardsPortalPlane(const Vector& pt,
         *nudged_to = nudged;
 }
 
-void TryVag(const PortalPair& pair, const Vector& pt, bool tp_from_p1, TpInfo& info_out)
+void TryVag(const PortalPair& pair, const Vector& pt, bool tp_from_blue, TpInfo& info_out)
 {
-    auto& first_tp_p = tp_from_p1 ? pair.blue : pair.orange;
-    auto& second_tp_p = tp_from_p1 ? pair.orange : pair.blue;
+    auto& p1 = tp_from_blue ? pair.blue : pair.orange;
+    auto& p2 = tp_from_blue ? pair.orange : pair.blue;
 
-    NudgePointTowardsPortalPlane(pt, first_tp_p, &info_out.tp_from, nullptr, true);
-    info_out.tp_to = pair.TeleportNonPlayerEntity(info_out.tp_from, tp_from_p1);
-    NudgePointTowardsPortalPlane(info_out.tp_to, second_tp_p, nullptr, &info_out.ulps_from_exit, false);
+    NudgePointTowardsPortalPlane(pt, p1, &info_out.tp_from, &info_out.ulps_for_init_pt, true);
+    info_out.tp_to = pair.TeleportNonPlayerEntity(info_out.tp_from, tp_from_blue);
+    NudgePointTowardsPortalPlane(info_out.tp_to, p2, nullptr, &info_out.ulps_from_exit, false);
 
-    if (info_out.ulps_from_exit[0] < 0 || info_out.ulps_from_exit[1] < 0 || info_out.ulps_from_exit[2] < 0) {
-        Vector pt_back_to_first = pair.TeleportNonPlayerEntity(info_out.tp_to, !tp_from_p1);
-        info_out.result = first_tp_p.ShouldTeleport(pt_back_to_first, false) ? TpResult::RecursiveTp : TpResult::VAG;
+    if (p2.ShouldTeleport(info_out.tp_to, false)) {
+        Vector pt_back_to_first = pair.TeleportNonPlayerEntity(info_out.tp_to, !tp_from_blue);
+        info_out.result = p1.ShouldTeleport(pt_back_to_first, false) ? TpResult::RecursiveTp : TpResult::VAG;
     } else {
         info_out.result = TpResult::Nothing;
     }

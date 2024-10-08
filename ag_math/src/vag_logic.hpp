@@ -14,7 +14,7 @@ using IntVector = std::array<int, 3>;
 
 struct TpInfo {
     Vector tp_from, tp_to;
-    IntVector ulps_from_exit;
+    IntVector ulps_for_init_pt, ulps_from_exit;
     TpResult result;
 };
 
