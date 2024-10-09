@@ -47,7 +47,12 @@ void TryVag(const PortalPair& pair, const Vector& pt, bool tp_from_blue, TpInfo&
 
     if (p2.ShouldTeleport(info_out.tp_to, false)) {
         Vector pt_back_to_first = pair.TeleportNonPlayerEntity(info_out.tp_to, !tp_from_blue);
-        info_out.result = p1.ShouldTeleport(pt_back_to_first, false) ? TpResult::RecursiveTp : TpResult::VAG;
+        if (p1.ShouldTeleport(pt_back_to_first, false)) {
+            info_out.result = TpResult::RecursiveTp;
+        } else {
+            info_out.result = TpResult::VAG;
+            info_out.tp_to_final = pair.TeleportNonPlayerEntity(pt_back_to_first, !tp_from_blue);
+        }
     } else {
         info_out.result = TpResult::Nothing;
     }

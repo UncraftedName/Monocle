@@ -38,7 +38,7 @@ struct VecUlpDiff {
 };
 
 struct TpInfo {
-    Vector tp_from, tp_to;
+    Vector tp_from, tp_to, tp_to_final;
     VecUlpDiff ulps_for_init_pt, ulps_from_exit;
     TpResult result;
 };

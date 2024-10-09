@@ -121,6 +121,13 @@ struct Vector {
         assert(i >= 0 && i < 3);
         return ((float*)this)[i];
     }
+
+    // may not match game's values exactly
+    float DistToSqr(const Vector& v) const
+    {
+        Vector d = *this - v;
+        return d.x * d.x + d.y * d.y + d.z * d.z;
+    }
 };
 
 struct QAngle {
