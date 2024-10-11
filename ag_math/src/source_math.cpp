@@ -6,7 +6,6 @@
 extern "C" void __cdecl AngleMatrix(const QAngle* angles, matrix3x4_t* matrix);
 extern "C" void __cdecl AngleVectors(const QAngle* angles, Vector* f, Vector* r, Vector* u);
 extern "C" void __cdecl MatrixInverseTR(const VMatrix* src, VMatrix* dst);
-// TODO unused
 extern "C" void __cdecl Vector3DMultiply(const VMatrix* src1, const Vector* src2, Vector* dst);
 extern "C" void __cdecl VMatrix__MatrixMul(const VMatrix* lhs, const VMatrix* rhs, VMatrix* out);
 extern "C" Vector* __cdecl VMatrix__operatorVec(const VMatrix* lhs, Vector* out, const Vector* vVec);
@@ -36,12 +35,60 @@ Portal::Portal(const Vector& v, const QAngle& q) : pos{v}, ang{q}
     AngleVectors(&ang, &f, &r, &u);
     Portal_CalcPlane(&pos, &f, &plane);
     AngleMatrix(&ang, &pos, &mat);
+
+    // CPortalSimulator::MoveTo
+    // forward, backward, up, down, left, right
+    hole_planes[0].n = f;
+    hole_planes[0].d = plane.d - 0.5f;
+    hole_planes[1].n = -f;
+    hole_planes[1].d = -plane.d + PORTAL_HOLE_DEPTH;
+    hole_planes[2].n = u;
+    hole_planes[2].d = u.Dot(pos + u * (PORTAL_HALF_HEIGHT * .98f));
+    hole_planes[3].n = -u;
+    hole_planes[3].d = -u.Dot(pos - u * (PORTAL_HALF_HEIGHT * .98f));
+    hole_planes[4].n = -r;
+    hole_planes[4].d = -r.Dot(pos - r * (PORTAL_HALF_WIDTH * .98f));
+    hole_planes[5].n = r;
+    hole_planes[5].d = r.Dot(pos + r * (PORTAL_HALF_WIDTH * .98f));
+    // SignbitsForPlane & setting the type
+    for (int i = 0; i < 6; i++) {
+        hole_planes_bits[i].sign = 0;
+        hole_planes_bits[i].type = 3;
+        for (int j = 0; j < 3; j++) {
+            if (hole_planes[i].n[j] < 0)
+                hole_planes_bits[i].sign |= 1 << j;
+            else if (fabsf(hole_planes[i].n[j]) >= 0.999f)
+                hole_planes_bits[i].type = j;
+        }
+    }
 }
 
-bool Portal::ShouldTeleport(const Vector& ent_center, bool check_portal_hole) const
+bool Portal::ShouldTeleport(const Entity& ent, bool check_portal_hole) const
 {
-    assert(!check_portal_hole);
-    return Portal_EntBehindPlane(&plane, &ent_center);
+    Vector center = ent.GetCenter();
+    if (!Portal_EntBehindPlane(&plane, &center))
+        return false;
+    if (!check_portal_hole)
+        return true;
+    /*
+    * This portal hole check is an approximation and isn't meant to exactly replicate what the game
+    * does. The game actually uses vphys to check if the entity or player collides with the portal
+    * hole mesh, but I only care about high precision on the portal boundary. For portal hole
+    * checks, I assume the entity is a crouched player or a ball.
+    */
+    if (ent.player) {
+        Vector world_mins = ent.origin + PLAYER_CROUCH_MINS;
+        Vector world_maxs = ent.origin + PLAYER_CROUCH_MAXS;
+        for (int i = 0; i < 6; i++)
+            if (BoxOnPlaneSide(world_mins, world_maxs, hole_planes[i], hole_planes_bits[i]) == PSR_FRONT)
+                return false;
+    } else {
+        assert(("entities that are too small will fail portal hole check", ent.radius >= 1.f));
+        for (int i = 0; i < 6; i++)
+            if (BallOnPlaneSide(ent.origin, ent.radius, hole_planes[i]) == PSR_FRONT)
+                return false;
+    }
+    return true;
 }
 
 void PortalPair::CalcTpMatrices(PlacementOrder order)
@@ -94,11 +141,89 @@ void PortalPair::CalcTpMatrices(PlacementOrder order)
     }
 }
 
-Vector PortalPair::TeleportNonPlayerEntity(const Vector& pt, bool tp_from_blue) const
+void PortalPair::Teleport(Entity& ent, bool tp_from_blue) const
+{
+    // you haven't called CalcTpMatrices yet!!!
+    assert(!std::isnan(b_to_o.m[3][3]) && !std::isnan(o_to_b.m[3][3]));
+    Vector new_origin;
+    Vector center = ent.GetCenter();
+    VMatrix__operatorVec(tp_from_blue ? &b_to_o : &o_to_b, &new_origin, &center);
+    if (ent.player)
+        new_origin += ent.origin - center;
+    ent.origin = new_origin;
+}
+
+Vector PortalPair::Teleport(const Vector& pt, bool tp_from_blue) const
 {
     // you haven't called CalcTpMatrices yet!!!
     assert(!std::isnan(b_to_o.m[3][3]) && !std::isnan(o_to_b.m[3][3]));
     Vector v;
     VMatrix__operatorVec(tp_from_blue ? &b_to_o : &o_to_b, &v, &pt);
     return v;
+}
+
+int BoxOnPlaneSide(const Vector& mins, const Vector& maxs, const VPlane& p, plane_bits bits)
+{
+    if (bits.type < 3) {
+        if (p.d <= mins[bits.type])
+            return PSR_FRONT;
+        if (p.d >= maxs[bits.type])
+            return PSR_BACK;
+        return PSR_ON;
+    }
+    float d1, d2;
+    switch (bits.sign) {
+        case 0:
+            d1 = p.n[0] * maxs[0] + p.n[1] * maxs[1] + p.n[2] * maxs[2];
+            d2 = p.n[0] * mins[0] + p.n[1] * mins[1] + p.n[2] * mins[2];
+            break;
+        case 1:
+            d1 = p.n[0] * mins[0] + p.n[1] * maxs[1] + p.n[2] * maxs[2];
+            d2 = p.n[0] * maxs[0] + p.n[1] * mins[1] + p.n[2] * mins[2];
+            break;
+        case 2:
+            d1 = p.n[0] * maxs[0] + p.n[1] * mins[1] + p.n[2] * maxs[2];
+            d2 = p.n[0] * mins[0] + p.n[1] * maxs[1] + p.n[2] * mins[2];
+            break;
+        case 3:
+            d1 = p.n[0] * mins[0] + p.n[1] * mins[1] + p.n[2] * maxs[2];
+            d2 = p.n[0] * maxs[0] + p.n[1] * maxs[1] + p.n[2] * mins[2];
+            break;
+        case 4:
+            d1 = p.n[0] * maxs[0] + p.n[1] * maxs[1] + p.n[2] * mins[2];
+            d2 = p.n[0] * mins[0] + p.n[1] * mins[1] + p.n[2] * maxs[2];
+            break;
+        case 5:
+            d1 = p.n[0] * mins[0] + p.n[1] * maxs[1] + p.n[2] * mins[2];
+            d2 = p.n[0] * maxs[0] + p.n[1] * mins[1] + p.n[2] * maxs[2];
+            break;
+        case 6:
+            d1 = p.n[0] * maxs[0] + p.n[1] * mins[1] + p.n[2] * mins[2];
+            d2 = p.n[0] * mins[0] + p.n[1] * maxs[1] + p.n[2] * maxs[2];
+            break;
+        case 7:
+            d1 = p.n[0] * mins[0] + p.n[1] * mins[1] + p.n[2] * mins[2];
+            d2 = p.n[0] * maxs[0] + p.n[1] * maxs[1] + p.n[2] * maxs[2];
+            break;
+        default:
+            assert(0);
+    }
+    int r = 0;
+    if (d1 >= p.d)
+        r |= PSR_FRONT;
+    if (d2 < p.d)
+        r |= PSR_BACK;
+    assert(r);
+    return r;
+}
+
+// VPlane::GetPointSide
+int BallOnPlaneSide(const Vector& c, float r, const VPlane& p)
+{
+    float d = c.Dot(p.n) - p.d;
+    if (d >= r)
+        return PSR_FRONT;
+    if (d <= -r)
+        return PSR_BACK;
+    return PSR_ON;
 }

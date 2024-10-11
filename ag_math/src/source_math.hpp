@@ -9,6 +9,10 @@
 
 #define F_TO_STR_BUF_SIZE 24
 
+#define PORTAL_HALF_WIDTH 32.0f
+#define PORTAL_HALF_HEIGHT 54.0f
+#define PORTAL_HOLE_DEPTH 500.f
+
 inline void SyncFloatingPointControlWord()
 {
     // 0x9001f (default msvc settings) - mask all exceptions, near rounding, 53 bit mantissa precision, projective infinity
@@ -58,7 +62,7 @@ struct Vector {
 #else
     Vector() {}
 #endif
-    Vector(float x, float y, float z) : x{x}, y{y}, z{z} {}
+    constexpr Vector(float x, float y, float z) : x{x}, y{y}, z{z} {}
 
     void print() const
     {
@@ -87,7 +91,7 @@ struct Vector {
         return *this;
     }
 
-    Vector operator+(const Vector& v) const
+    constexpr Vector operator+(const Vector& v) const
     {
         return Vector{x + v.x, y + v.y, z + v.z};
     }
@@ -100,12 +104,12 @@ struct Vector {
         return *this;
     }
 
-    Vector operator-(const Vector& v) const
+    constexpr Vector operator-(const Vector& v) const
     {
         return Vector{x - v.x, y - v.y, z - v.z};
     }
 
-    Vector operator-() const
+    constexpr Vector operator-() const
     {
         return Vector{-x, -y, -z};
     }
@@ -122,11 +126,22 @@ struct Vector {
         return ((float*)this)[i];
     }
 
+    constexpr float Dot(const Vector& v) const
+    {
+        // may not match game - game may calculate (x+y)+z or x+(y+z), which might matter idk
+        return x * v.x + y * v.y + z * v.z;
+    }
+
     // may not match game's values exactly
-    float DistToSqr(const Vector& v) const
+    constexpr float DistToSqr(const Vector& v) const
     {
         Vector d = *this - v;
-        return d.x * d.x + d.y * d.y + d.z * d.z;
+        return d.Dot(d);
+    }
+
+    constexpr Vector operator*(float f) const
+    {
+        return Vector{x * f, y * f, z * f};
     }
 };
 
@@ -138,7 +153,7 @@ struct QAngle {
 #else
     QAngle() {}
 #endif
-    QAngle(float x, float y, float z) : x{x}, y{y}, z{z} {}
+    constexpr QAngle(float x, float y, float z) : x{x}, y{y}, z{z} {}
 
     void print() const
     {
@@ -175,7 +190,7 @@ struct VMatrix {
 #else
     VMatrix() {}
 #endif
-    VMatrix(const Vector& x, const Vector& y, const Vector& z, const Vector& pos)
+    constexpr VMatrix(const Vector& x, const Vector& y, const Vector& z, const Vector& pos)
         : m{
               {x.x, y.x, z.x, pos.x},
               {x.y, y.y, z.y, pos.y},
@@ -204,7 +219,7 @@ struct VPlane {
 #else
     VPlane() {}
 #endif
-    VPlane(const Vector& n, float d) : n{n}, d{d} {}
+    constexpr VPlane(const Vector& n, float d) : n{n}, d{d} {}
 
     void print() const
     {
@@ -216,6 +231,36 @@ struct VPlane {
     }
 };
 
+static constexpr Vector PLAYER_CROUCH_MINS{-16.f, -16.f, 0.f};
+static constexpr Vector PLAYER_CROUCH_MAXS{16.f, 16.f, 36.f};
+
+struct Entity {
+
+    bool player;
+    Vector origin;
+    // if player, use AABB; if non-player, treat as ball (game uses actually mesh but I don't need that)
+    float radius;
+
+    Entity() : radius{NAN} {};
+    // player ctor
+    explicit Entity(const Vector& center)
+        : player{true}, origin{center - (PLAYER_CROUCH_MAXS + PLAYER_CROUCH_MINS) * .5f}, radius{NAN}
+    {}
+    // non-player ctor (assume center == origin)
+    explicit Entity(const Vector& center, float r) : player{false}, origin{center}, radius{r} {}
+
+    Vector GetCenter() const
+    {
+        return player ? origin + (PLAYER_CROUCH_MAXS + PLAYER_CROUCH_MINS) * .5f : origin;
+    }
+};
+
+struct plane_bits {
+    // 0:x, 1:y, 2:z, 3:non-axial
+    uint8_t type : 3;
+    uint8_t sign : 3;
+};
+
 // TODO - these fields might be generated a different way if the portal loaded in?
 struct Portal {
     Vector pos; // m_vecOrigin/m_vecAbsOrigin
@@ -225,10 +270,14 @@ struct Portal {
     VPlane plane;    // m_PortalSimulator.m_InternalData.Placement.PortalPlane
     matrix3x4_t mat; // m_rgflCoordinateFrame
 
+    // fHolePlanes as calculated in CPortalSimulator::MoveTo, not guaranteed to match game's values exactly
+    VPlane hole_planes[6];
+    plane_bits hole_planes_bits[6]; // for fast box plane tests
+
     Portal(const Vector& v, const QAngle& q);
 
     // follows the logic in ShouldTeleportTouchingEntity
-    bool ShouldTeleport(const Vector& ent_center, bool check_portal_hole) const;
+    bool ShouldTeleport(const Entity& ent, bool check_portal_hole) const;
 
     void print() const
     {
@@ -335,8 +384,9 @@ struct PortalPair {
     // sets b_to_o & o_to_b
     void CalcTpMatrices(PlacementOrder order);
 
-    // TeleportTouchingEntity for a non-player entity
-    Vector TeleportNonPlayerEntity(const Vector& pt, bool tp_from_blue) const;
+    // TeleportTouchingEntity (if player, assumes they are crouched)
+    void Teleport(Entity& ent, bool tp_from_blue) const;
+    Vector Teleport(const Vector& pt, bool tp_from_blue) const;
 
     void print() const
     {
@@ -366,3 +416,12 @@ struct PortalPair {
         }
     }
 };
+
+enum PlaneSideResult {
+    PSR_BACK = 1,
+    PSR_FRONT = 2,
+    PSR_ON = PSR_BACK | PSR_FRONT,
+};
+
+int BoxOnPlaneSide(const Vector& mins, const Vector& maxs, const VPlane& p, plane_bits bits);
+int BallOnPlaneSide(const Vector& c, float r, const VPlane& p);
