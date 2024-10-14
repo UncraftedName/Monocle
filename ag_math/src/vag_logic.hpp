@@ -37,7 +37,7 @@ struct VecUlpDiff {
 struct TpChain {
     // the points to/from which the teleports happen, has n_teleports + 1 elems
     std::vector<Vector> pts;
-    // ulps from each pt to behind the portal; only applicable if the point is near the portal,
+    // ulps from each pt to behind the portal; only applicable if the point is near a portal,
     // otherwise will have ax=ULP_DIFF_TOO_LARGE_AX; has n_teleports + 1 elems
     std::vector<VecUlpDiff> ulp_diffs;
     // direction of each teleport (true for the primary portal), has n_teleports elems
@@ -77,13 +77,24 @@ void NudgeEntityTowardsPortalPlane(Entity& ent,
                                    bool change_ent_pos,
                                    VecUlpDiff* ulp_diff);
 
+#define N_CHILDREN_PLAYER_WITHOUT_PORTAL_GUN 1
+#define N_CHILDREN_PLAYER_WITH_PORTAL_GUN 2
+
 /*
 * Generates the chain of teleports that is produced within a single tick when an entity teleports.
-* 
-* This is the function you use to determine if a teleport will turn into a VAG
+* This is the function you use to determine if a teleport will turn into a VAG or something more
+* complicated.
 * 
 * The entity is expected to be very close to the portal it is being teleported from, and it will
 * automatically be nudged until it is just barely behind the portal. Putting the entity too far
-* away will simply cause the nudge to take an extremely long time.
+* away will cause the nudge to take an extremely long time.
+* 
+* The number of children the entities has is only relevant for chains more complicated than a VAG.
+* The player normally has 2 (portal gun & view model).
 */
-void GenerateTeleportChain(const PortalPair& pair, Entity& ent, bool tp_from_blue, TpChain& chain, int n_max_teleports);
+void GenerateTeleportChain(const PortalPair& pair,
+                           Entity& ent,
+                           size_t n_ent_children,
+                           bool tp_from_blue,
+                           TpChain& chain,
+                           size_t n_max_teleports);

@@ -38,7 +38,7 @@ int main(int argc, char* argv[])
 */
 #define REPEAT_TEST(n)                    \
     int _test_it = GENERATE(range(0, n)); \
-    INFO("test iteration " << _test_it + 1)
+    INFO("test iteration " << _test_it)
 
 static Portal RandomPortal(small_prng& rng)
 {
@@ -152,8 +152,10 @@ TEST_CASE("ShouldTeleport (with portal hole check")
 
     constexpr float SPACING = 20.f;
 
-    INFO("grid offset: (f*" << -1.5f + ((grid_bits >> 0) & 0b11) << " + r*" << -1.5f + ((grid_bits >> 2) & 0b11)
-                            << " + u*" << -1.5f + ((grid_bits >> 4) & 0b11) << ") * " << SPACING);
+    INFO("grid offset: (f*" << (-1.5f + ((grid_bits >> 0) & 0b11)) * ((corner_bits & 1) ? -1.f : 1.f) << " + r*"
+                            << (-1.5f + ((grid_bits >> 2) & 0b11)) * ((corner_bits & 2) ? -1.f : 1.f) << " + u*"
+                            << (-1.5f + ((grid_bits >> 4) & 0b11)) * ((corner_bits & 4) ? -1.f : 1.f) << ") * "
+                            << SPACING);
 
     // the grid offset is set so that bigger grid bits point are further away from the portal center, this makes the should_teleport condition simplier
     Vector grid_off = p.f * (-1.5f + ((grid_bits >> 0) & 0b11)) * ((corner_bits & 1) ? -1.f : 1.f) +
@@ -293,7 +295,7 @@ TEST_CASE("Teleport chain results in VAG")
 
     const int n_teleports_success = 3;
 
-    for (int n_max_teleports = 1; n_max_teleports < n_teleports_success + 2; n_max_teleports++) {
+    for (int n_max_teleports = 0; n_max_teleports < n_teleports_success + 2; n_max_teleports++) {
         char section_name[32];
         snprintf(section_name, sizeof section_name, "teleport limit is %d", n_max_teleports);
 
@@ -302,17 +304,15 @@ TEST_CASE("Teleport chain results in VAG")
             Vector target_vag_pos = pp.Teleport(player.GetCenter(), true);
 
             TpChain chain;
-            GenerateTeleportChain(pp, player, false, chain, n_max_teleports);
-            int n_actual_teleports = n_max_teleports;
-            if (n_max_teleports > n_teleports_success)
-                n_actual_teleports = n_teleports_success;
+            GenerateTeleportChain(pp, player, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, false, chain, n_max_teleports);
+            int n_actual_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
 
             REQUIRE(chain.max_tps_exceeded == (n_actual_teleports < n_teleports_success));
             REQUIRE(chain.tp_dirs.size() == n_actual_teleports);
             REQUIRE(chain.tps_queued.size() == (n_actual_teleports + 1));
             REQUIRE(chain.pts.size() == (n_actual_teleports + 1));
             REQUIRE(chain.ulp_diffs.size() == (n_actual_teleports + 1));
-            REQUIRE(chain.cum_primary_tps == std::vector<int>{1, 0, -1}[n_actual_teleports - 1]);
+            REQUIRE(chain.cum_primary_tps == std::vector<int>{0, 1, 0, -1}[n_actual_teleports]);
 
             switch (n_actual_teleports) {
                 case 3:
@@ -335,14 +335,16 @@ TEST_CASE("Teleport chain results in VAG")
                     REQUIRE_THAT(chain.pts[1].DistToSqr(pp.blue.pos), Catch::Matchers::WithinAbs(0, .5f));
                     REQUIRE(chain.ulp_diffs[1].ax == 0);
                     REQUIRE(chain.ulp_diffs[1].diff + 1 > 0); // player behind orange
+                    [[fallthrough]];
+                case 0:
+                    REQUIRE(chain.tps_queued[0] == 1);
+                    REQUIRE_THAT(chain.pts[0].DistToSqr(pp.orange.pos), Catch::Matchers::WithinAbs(0, .5f));
+                    REQUIRE(chain.ulp_diffs[0].ax == 0);
+                    REQUIRE(chain.ulp_diffs[0].diff + 1 > 0);
                     break;
                 default:
                     FAIL();
             }
-            REQUIRE(chain.tps_queued[0] == 1);
-            REQUIRE_THAT(chain.pts[0].DistToSqr(pp.orange.pos), Catch::Matchers::WithinAbs(0, .5f));
-            REQUIRE(chain.ulp_diffs[0].ax == 0);
-            REQUIRE(chain.ulp_diffs[0].diff + 1 > 0);
         }
     }
 }
@@ -365,7 +367,7 @@ TEST_CASE("Teleport chain results in 5 teleports")
 
     const int n_teleports_success = 5;
 
-    for (int n_max_teleports = 1; n_max_teleports < n_teleports_success + 2; n_max_teleports++) {
+    for (int n_max_teleports = 0; n_max_teleports < n_teleports_success + 2; n_max_teleports++) {
         char section_name[32];
         snprintf(section_name, sizeof section_name, "teleport limit is %d", n_max_teleports);
 
@@ -374,17 +376,15 @@ TEST_CASE("Teleport chain results in 5 teleports")
             Vector target_vag_pos = pp.Teleport(player.GetCenter(), true);
 
             TpChain chain;
-            GenerateTeleportChain(pp, player, false, chain, n_max_teleports);
-            int n_actual_teleports = n_max_teleports;
-            if (n_max_teleports > n_teleports_success)
-                n_actual_teleports = n_teleports_success;
+            GenerateTeleportChain(pp, player, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, false, chain, n_max_teleports);
+            int n_actual_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
 
             REQUIRE(chain.max_tps_exceeded == (n_actual_teleports < n_teleports_success));
             REQUIRE(chain.tp_dirs.size() == n_actual_teleports);
             REQUIRE(chain.tps_queued.size() == (n_actual_teleports + 1));
             REQUIRE(chain.pts.size() == (n_actual_teleports + 1));
             REQUIRE(chain.ulp_diffs.size() == (n_actual_teleports + 1));
-            REQUIRE(chain.cum_primary_tps == std::vector<int>{1, 0, -1, 0, 1}[n_actual_teleports - 1]);
+            REQUIRE(chain.cum_primary_tps == std::vector<int>{0, 1, 0, -1, 0, 1}[n_actual_teleports]);
 
             switch (n_actual_teleports) {
                 case 5:
@@ -420,14 +420,16 @@ TEST_CASE("Teleport chain results in 5 teleports")
                     REQUIRE_THAT(chain.pts[1].DistToSqr(pp.blue.pos), Catch::Matchers::WithinAbs(0, .5f));
                     REQUIRE(chain.ulp_diffs[1].ax == 0);
                     REQUIRE(chain.ulp_diffs[1].diff + 1 > 0); // player behind orange
+                    [[fallthrough]];
+                case 0:
+                    REQUIRE(chain.tps_queued[0] == 1);
+                    REQUIRE_THAT(chain.pts[0].DistToSqr(pp.orange.pos), Catch::Matchers::WithinAbs(0, .5f));
+                    REQUIRE(chain.ulp_diffs[0].ax == 0);
+                    REQUIRE(chain.ulp_diffs[0].diff + 1 > 0);
                     break;
                 default:
                     FAIL();
             }
-            REQUIRE(chain.tps_queued[0] == 1);
-            REQUIRE_THAT(chain.pts[0].DistToSqr(pp.orange.pos), Catch::Matchers::WithinAbs(0, .5f));
-            REQUIRE(chain.ulp_diffs[0].ax == 0);
-            REQUIRE(chain.ulp_diffs[0].diff + 1 > 0);
         }
     }
 }
@@ -534,7 +536,8 @@ TEST_CASE("SPT with IPC")
         }
     } conn{};
 
-    conn.SendCmd("sv_cheats 1; spt_prevent_vag_crash 1; spt_focus_nosleep 1; spt_noclip_noslowfly 1; host_timescale 20");
+    conn.SendCmd(
+        "sv_cheats 1; spt_prevent_vag_crash 1; spt_focus_nosleep 1; spt_noclip_noslowfly 1; host_timescale 20");
     conn.RecvAck();
 
     small_prng rng;
@@ -555,7 +558,7 @@ TEST_CASE("SPT with IPC")
 
         pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
         Entity player{blue.pos};
-        GenerateTeleportChain(pp, player, true, chain, 3);
+        GenerateTeleportChain(pp, player, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, chain, 3);
         // only handle basic teleports and simple VAGs for now
         if (chain.max_tps_exceeded || (chain.cum_primary_tps != 1 && chain.cum_primary_tps != -1))
             continue;
@@ -591,6 +594,7 @@ TEST_CASE("SPT with IPC")
                                 &player_pos.x,
                                 &player_pos.y,
                                 &player_pos.z);
+        // if this fails, you may need to increase the delay of the last sleep or just rerun the test again
         REQUIRE(n_args == 3);
 
         INFO("iteration " << iteration);

@@ -18,3 +18,5 @@
 /bin/
 /.vs/
 /cmake/
+
+/vcpkg_installed/

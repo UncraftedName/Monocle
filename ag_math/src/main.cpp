@@ -1,75 +1,74 @@
 #include <iostream>
+#include <algorithm>
 
 #include "source_math.hpp"
 #include "vag_logic.hpp"
 #include "prng.hpp"
 
+#include <vector>
+#include <matplot/matplot.h>
+
 int main()
 {
     SyncFloatingPointControlWord();
 
-    {
-        PortalPair pp{{100, -100, 10}, {40, 50, 60}, {300, -300, 40}, {-30, -20, -10}};
-        pp.CalcTpMatrices(PlacementOrder::AFTER_LOAD);
-        Vector pt = pp.blue.pos;
-        pt -= pp.blue.f;
-        printf("blue plane: ");
-        pp.blue.plane.print();
-        Entity ent{pt - pp.blue.f, 1.f};
-        printf("\nshould teleport: %d\n", pp.blue.ShouldTeleport(ent, true));
-        printf("teleported from ");
-        ent.origin.print();
-        pp.Teleport(ent, true);
-        printf(" to ");
-        ent.origin.print();
-        printf("\nwhich should be close to ");
-        (pp.orange.pos + pp.orange.f).print();
-    }
-
-    small_prng rng{1};
+    small_prng rng{7};
+    int n_chains = 100000;
     TpChain chain;
-    for (int i = 0; i < 100000; i++) {
-        constexpr float p_min = -800.f, p_max = 800.f, a_min = -180.f, a_max = 180.f;
+    for (int i = 0; i < n_chains; i++) {
+        constexpr float p_min = 650.f, p_max = 1200.f, a_min = -180.f, a_max = 180.f;
+
         PortalPair pp{
             Vector{rng.next_float(p_min, p_max), rng.next_float(p_min, p_max), rng.next_float(p_min, p_max)},
-            QAngle{rng.next_float(a_min, a_max), rng.next_float(a_min, a_max), rng.next_float(a_min, a_max)},
+            QAngle{0, rng.next_float(a_min, a_max), 0},
             Vector{rng.next_float(p_min, p_max), rng.next_float(p_min, p_max), rng.next_float(p_min, p_max)},
-            QAngle{rng.next_float(a_min, a_max), rng.next_float(a_min, a_max), rng.next_float(a_min, a_max)},
+            QAngle{0, rng.next_int(-1, 2) * 90.f, 0},
         };
-
-        pp.CalcTpMatrices(PlacementOrder::AFTER_LOAD);
-        Entity ent{pp.blue.pos, 1.f};
-        GenerateTeleportChain(pp, ent, true, chain, 3);
-        if (chain.max_tps_exceeded || chain.cum_primary_tps != -1)
+        if (pp.blue.pos.DistToSqr(pp.orange.pos) < 300 * 300)
             continue;
 
         pp.CalcTpMatrices(PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION);
-        ent.origin = pp.blue.pos;
-        GenerateTeleportChain(pp, ent, true, chain, 1);
+        Entity ent{pp.blue.pos};
+        GenerateTeleportChain(pp, ent, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, chain, 20);
+
         if (chain.max_tps_exceeded)
             continue;
+        if (chain.cum_primary_tps >= -1 && chain.cum_primary_tps <= 1)
+            continue;
+        if (pp.blue.pos.DistToSqr(chain.pts[chain.pts.size() - 1]) < 300 * 300)
+            continue;
+        if (pp.orange.pos.DistToSqr(chain.pts[chain.pts.size() - 1]) < 300 * 300)
+            continue;
 
-        printf("\n\nFound VAG that's only possible after a saveload (iteration %d):\n", i + 1);
-        pp.print_newlocation_cmd();
-        printf("setpos ");
-        (chain.pts[0] - Vector{0, 0, 18.f}).print();
+        // clang-format off
+        Vector sp = Entity{chain.pts[0]}.origin;
+        printf(
+            "iteration %d\n"
+            "%d primary teleports:\n"
+            "ent_fire blue   newlocation \"%.9g %.9g %.9g %.9g %.9g %.9g\"\n"
+            "ent_fire orange newlocation \"%.9g %.9g %.9g %.9g %.9g %.9g\"\n"
+            "setpos %.9g %.9g %.9g\n",
+            i,
+            chain.cum_primary_tps,
+            pp.orange.pos.x, pp.orange.pos.y, pp.orange.pos.z, pp.orange.ang.x, pp.orange.ang.y, pp.orange.ang.z,
+            pp.blue.pos.x, pp.blue.pos.y, pp.blue.pos.z, pp.blue.ang.x, pp.blue.ang.y, pp.blue.ang.z,
+            sp.x, sp.y, sp.z
+        );
         break;
+        // clang-format on
     };
 
-    /*int buckets[(int)TpResult::COUNT]{};
-    int n_portals = 100000;
-    for (int i = 0; i < n_portals; i++) {
-        constexpr float p_min = -800.f, p_max = 800.f, a_min = -180.f, a_max = 180.f;
-        PortalPair pp{
-            Vector{rng.next_float(p_min, p_max), rng.next_float(p_min, p_max), rng.next_float(p_min, p_max)},
-            QAngle{rng.next_float(a_min, a_max), rng.next_float(a_min, a_max), rng.next_float(a_min, a_max)},
-            Vector{rng.next_float(p_min, p_max), rng.next_float(p_min, p_max), rng.next_float(p_min, p_max)},
-            QAngle{rng.next_float(a_min, a_max), rng.next_float(a_min, a_max), rng.next_float(a_min, a_max)},
-        };
-        TpInfo info;
-        pp.CalcTpMatrices(PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION);
-        TryVag(pp, pp.blue.pos, true, info);
-        buckets[(int)info.result]++;
-    }
-    printf("\n\n%d random pairs results: [%d, %d, %d]", n_portals, buckets[0], buckets[1], buckets[2]);*/
+    /*printf("\n\n");
+
+    std::vector<int> cum;
+    cum.resize(chains.size());
+
+    std::transform(chains.cbegin(), chains.cend(), cum.begin(), [](const TpChain& chain) {
+        return chain.cum_primary_tps;
+    });
+
+    using namespace matplot;
+
+    auto h = hist(cum);
+    show();*/
 }
