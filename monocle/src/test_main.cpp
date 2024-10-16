@@ -1,4 +1,4 @@
-#include "../../catch/src/catch_amalgamated.hpp"
+#include "catch_amalgamated.hpp"
 #include "source_math.hpp"
 #include "vag_logic.hpp"
 #include "prng.hpp"
