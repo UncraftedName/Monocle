@@ -9,6 +9,8 @@
 #include "vag_logic.hpp"
 #include "prng.hpp"
 #include "tga.hpp"
+#include "ctpl_stl.h"
+#include "time_scope.hpp"
 
 #include <vector>
 // #include <matplot/matplot.h>
@@ -128,21 +130,16 @@ static void GenerateResultsDistributionsToFile()
     of << "\"runs\": [";
 
     std::array pos_scales{6, 7, 8, 9};
-    std::array<int, 8> octs;
     std::array<int, PYT_COUNT> py_types;
     std::array roll_opts{false, true};
     // not per-portal
     std::array<int, (int)PlacementOrder::COUNT> mat_opts;
-    std::array<int, 4> init_pos_bits;
-    std::array is_player_opts{false, true};
 
-    std::iota(octs.begin(), octs.end(), 0);
     std::iota(py_types.begin(), py_types.end(), 0);
     std::iota(mat_opts.begin(), mat_opts.end(), 0);
-    std::iota(init_pos_bits.begin(), init_pos_bits.end(), 0);
 
-    auto portal_cp = std::ranges::views::cartesian_product(pos_scales, octs, py_types, roll_opts);
-    auto misc_cp = std::ranges::views::cartesian_product(mat_opts, init_pos_bits, is_player_opts);
+    auto portal_cp = std::ranges::views::cartesian_product(pos_scales, py_types, roll_opts);
+    auto misc_cp = std::ranges::views::cartesian_product(mat_opts);
     auto all_opts = std::ranges::views::cartesian_product(portal_cp, portal_cp, misc_cp);
 
     size_t n_complete = 0;
@@ -152,21 +149,20 @@ static void GenerateResultsDistributionsToFile()
 
         auto bp = std::get<0>(blue_opts);
 
-        bool pqr = std::get<1>(misc_opts) & 1;
-        bool pqu = std::get<1>(misc_opts) & 2;
         int results[RESULT_COUNT]{};
 
         for (int i = 0; i < n_runs_per_combination; i++) {
             PortalPair pp{
-                RandomPos(rng, std::get<1>(blue_opts), std::get<0>(blue_opts)),
-                RandomAng(rng, (PITCH_YAW_TYPE)std::get<2>(blue_opts), std::get<3>(blue_opts)),
-                RandomPos(rng, std::get<1>(orange_opts), std::get<0>(orange_opts)),
-                RandomAng(rng, (PITCH_YAW_TYPE)std::get<2>(orange_opts), std::get<3>(orange_opts)),
+                RandomPos(rng, rng.next_int(0, 8), std::get<0>(blue_opts)),
+                RandomAng(rng, (PITCH_YAW_TYPE)std::get<1>(blue_opts), std::get<2>(blue_opts)),
+                RandomPos(rng, rng.next_int(0, 8), std::get<0>(orange_opts)),
+                RandomAng(rng, (PITCH_YAW_TYPE)std::get<1>(orange_opts), std::get<2>(orange_opts)),
             };
             pp.CalcTpMatrices((PlacementOrder)std::get<0>(misc_opts));
-            Vector ent_pos = pp.blue.pos + pp.blue.r * rng.next_float(0, PORTAL_HALF_WIDTH / 2.f) * (pqr ? 1.f : -1.f) +
-                             pp.blue.u * rng.next_float(0, PORTAL_HALF_HEIGHT / 2.f) * (pqu ? 1.f : -1.f);
-            Entity ent = std::get<2>(misc_opts) ? Entity{ent_pos} : Entity{ent_pos, 1.f};
+            Vector ent_pos = pp.blue.pos +
+                             pp.blue.r * rng.next_float(-PORTAL_HALF_WIDTH * .5f, PORTAL_HALF_WIDTH * .5f) +
+                             pp.blue.u * rng.next_float(-PORTAL_HALF_HEIGHT * .5f, PORTAL_HALF_HEIGHT * .5f);
+            Entity ent{ent_pos};
             GenerateTeleportChain(pp, ent, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, chain, 3);
             if (chain.max_tps_exceeded)
                 results[RESULT_UNKNOWN]++;
@@ -182,13 +178,10 @@ static void GenerateResultsDistributionsToFile()
             auto& opts = i ? blue_opts : orange_opts;
             const char* prefix = i ? "\t\t\"blue." : "\t\t\"orange.";
             of << prefix << "pos_scale\": " << std::get<0>(opts) << ",\n";
-            of << prefix << "octant\": " << std::get<1>(opts) << ",\n";
-            of << prefix << "pitch_yaw_type\": \"" << PITCH_YAW_STRS[std::get<2>(opts)] << "\",\n";
-            of << prefix << "has_roll\": " << (std::get<3>(opts) ? "true" : "false") << ",\n";
+            of << prefix << "pitch_yaw_type\": \"" << PITCH_YAW_STRS[std::get<1>(opts)] << "\",\n";
+            of << prefix << "has_roll\": " << (std::get<2>(opts) ? "true" : "false") << ",\n";
         }
-        of << "\t\t\"matrix\": \"" << PlacementOrderStrs[(int)std::get<0>(misc_opts)] << "\",\n";
-        of << "\t\t\"is_player\": " << (std::get<2>(misc_opts) ? "true" : "false") << ",\n";
-        of << "\t\t\"init_portal_quadrant\": " << std::get<1>(misc_opts);
+        of << "\t\t\"matrix\": \"" << PlacementOrderStrs[(int)std::get<0>(misc_opts)] << "\"";
         of << "\n\t},\n\t\"results\": [";
         for (int i = 0; i < RESULT_COUNT; i++)
             of << ((double)results[i] / n_runs_per_combination) << (i == RESULT_COUNT - 1 ? "]\n}" : ", ");
@@ -201,44 +194,55 @@ static void GenerateResultsDistributionsToFile()
 
 static void CreateOverlayPortalImage(const PortalPair& pair, const char* file_name, size_t y_res, bool from_blue)
 {
+    TIME_FUNC();
+
+    const Portal& p = from_blue ? pair.blue : pair.orange;
     size_t x_res = (size_t)((double)y_res * PORTAL_HALF_WIDTH / PORTAL_HALF_HEIGHT);
     struct pixel {
         uint8_t b, g, r, a;
     };
     std::vector<pixel> pixels{y_res * x_res};
-    TpChain chain;
-    Vector ul{};
+    ctpl::thread_pool pool{};
     for (size_t y = 0; y < y_res; y++) {
-        for (size_t x = 0; x < x_res; x++) {
-            float ox = PORTAL_HALF_WIDTH * (-1 + 1.f / x_res);
-            float tx = (float)x / (x_res - 1);
-            float mx = ox * (1 - 2 * tx);
 
-            float oy = PORTAL_HALF_HEIGHT * (-1 + 1.f / y_res);
-            float ty = (float)y / (y_res - 1);
-            float my = oy * (1 - 2 * ty);
+        float oy = PORTAL_HALF_HEIGHT * (-1 + 1.f / y_res);
+        float ty = (float)y / (y_res - 1);
+        float my = oy * (1 - 2 * ty);
+        Vector u_off = p.u * my;
 
-            const Portal& p = from_blue ? pair.blue : pair.orange;
-            Entity ent{p.pos + p.r * mx + p.u * my};
+        pool.push([x_res, u_off, y, from_blue, &p, &pair, &pixels](int) -> void {
+            TpChain chain;
+            for (size_t x = 0; x < x_res; x++) {
+                float ox = PORTAL_HALF_WIDTH * (-1 + 1.f / x_res);
+                float tx = (float)x / (x_res - 1);
+                float mx = ox * (1 - 2 * tx);
 
-            GenerateTeleportChain(pair, ent, N_CHILDREN_PLAYER_WITHOUT_PORTAL_GUN, from_blue, chain, 3);
-            pixel& pix = pixels[x_res * y + x];
-            pix.a = 255;
-            if (chain.max_tps_exceeded)
-                pix.r = pix.g = pix.b = 0;
-            else if (chain.cum_primary_tps == 1)
-                pix.r = pix.g = pix.b = 125;
-            else if (chain.cum_primary_tps == -1)
-                pix.g = 255;
-            else
-                assert(0);
-        }
+                Vector r_off = p.r * mx;
+                Entity ent{p.pos + r_off + u_off};
+
+                GenerateTeleportChain(pair, ent, N_CHILDREN_PLAYER_WITHOUT_PORTAL_GUN, from_blue, chain, 3);
+                pixel& pix = pixels[x_res * y + x];
+                pix.a = 255;
+                if (chain.max_tps_exceeded)
+                    pix.r = pix.g = pix.b = 0;
+                else if (chain.cum_primary_tps == 1)
+                    pix.r = pix.g = pix.b = 125;
+                else if (chain.cum_primary_tps == -1)
+                    pix.g = 255;
+                else
+                    assert(0);
+            }
+        });
     }
+    pool.stop(true);
+    TIME_SCOPE("TGA_WRITE");
     tga_write(file_name, x_res, y_res, (uint8_t*)pixels.data(), 4, 3);
 }
 
 static void FindVagIn04()
 {
+    TIME_FUNC();
+
     small_prng rng{0};
     TpChain chain;
     float xmin = -75.70868f;
@@ -276,9 +280,8 @@ static void FindVagIn04()
         pp.PrintNewlocationCmd();
         ent_copy.PrintSetposCmd();
         const char* file_name = "04_blue.tga";
-        printf("writing image %s...\n", file_name);
-        CreateOverlayPortalImage(pp, file_name, 101, true);
-        printf("done.\n");
+        printf("Found portal, generating overlay image\n");
+        CreateOverlayPortalImage(pp, file_name, 1000, true);
         break;
     }
 }
