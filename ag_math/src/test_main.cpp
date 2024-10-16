@@ -244,6 +244,9 @@ TEST_CASE("Nudging point towards portal plane")
     REPEAT_TEST(10000);
     static small_prng rng;
     Portal p = RandomPortal(rng);
+    for (int i = 0; i < 3; i++)
+        if (fabsf(p.pos[i]) < 0.5f)
+            return;
     int translate_mask = rng.next_int(0, 8);
     bool nudge_behind = rng.next_bool();
     bool is_player = rng.next_bool();
@@ -553,6 +556,13 @@ TEST_CASE("SPT with IPC")
         */
         if (blue.pos.DistToSqr(orange.pos) < 500 * 500)
             continue;
+        bool closeToZero = false;
+        for (int i = 0; i < 2 && !closeToZero; i++)
+            for (int j = 0; j < 3 && closeToZero; j++)
+                if (fabsf((i == 0 ? blue.pos : orange.pos)[j]) < 0.5f)
+                    closeToZero = true;
+        if (closeToZero)
+            continue; // don't use portals where the nudges might take a really long time
 
         PortalPair pp{blue, orange};
 

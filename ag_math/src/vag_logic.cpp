@@ -17,6 +17,7 @@ void NudgeEntityTowardsPortalPlane(Entity& ent,
             nudge_axis = i;
         }
     }
+    assert(fabsf(portal.pos[nudge_axis]) > 0.03f); // this'll take too long to converge close to 0
     if (ulp_diff)
         ulp_diff->Reset();
 
@@ -168,6 +169,7 @@ static bool ChainTeleportRecursive(TpChainData& data)
     return true;
 }
 
+// TODO this really needs to be broken up and does not function correct for more than 3 max teleports
 void GenerateTeleportChain(const PortalPair& pair,
                            Entity& ent,
                            size_t n_ent_children,

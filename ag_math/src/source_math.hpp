@@ -2,6 +2,7 @@
 
 #include <float.h>
 #include <charconv>
+#include <array>
 
 #include "math.h"
 #include "stdio.h"
@@ -253,6 +254,12 @@ struct Entity {
     {
         return player ? origin + (PLAYER_CROUCH_MAXS + PLAYER_CROUCH_MINS) * .5f : origin;
     }
+
+    void PrintSetposCmd() const
+    {
+        assert(player);
+        printf("setpos %.9g %.9g %.9g\n", origin.x, origin.y, origin.z);
+    }
 };
 
 struct plane_bits {
@@ -372,6 +379,12 @@ enum class PlacementOrder {
     COUNT,
 };
 
+static std::array<const char*, (int)PlacementOrder::COUNT> PlacementOrderStrs{
+    "BLUE_UpdatePortalTransformationMatrix",
+    "ORANGE_UpdatePortalTransformationMatrix",
+    "UpdateLinkMatrix",
+};
+
 struct PortalPair {
     Portal blue, orange;
     VMatrix b_to_o, o_to_b;
@@ -400,7 +413,7 @@ struct PortalPair {
         o_to_b.print();
     }
 
-    void print_newlocation_cmd() const
+    void PrintNewlocationCmd() const
     {
         for (int i = 0; i < 2; i++) {
             auto& p = i ? blue : orange;

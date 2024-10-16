@@ -21,7 +21,10 @@ reports false results.
 
 The goal of this project is to provide an environment outside of the game that
 can reproduce the conditions needed to check if a VAG is possible on a specific
-set of portals. It can also reproduce more complex chains of teleports 
+set of portals. To do this, some math functions had to be replicated in assembly.
+
+It also had the goal of reproducing more complex chains of teleports, but that
+is still very much WIP.
 
 ## Building
 
