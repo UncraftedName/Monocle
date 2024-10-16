@@ -35,6 +35,9 @@ struct VecUlpDiff {
 #define CUM_TP_VAG (-1)
 
 struct TpChain {
+
+    using portal_type = int;
+
     // the points to/from which the teleports happen, has n_teleports + 1 elems
     std::vector<Vector> pts;
     // ulps from each pt to behind the portal; only applicable if the point is near a portal,
@@ -51,7 +54,7 @@ struct TpChain {
     bool max_tps_exceeded;
 
     // internal teleport queue
-    std::deque<int> _tp_queue;
+    std::deque<portal_type> _tp_queue;
 
     void Clear()
     {
@@ -95,6 +98,7 @@ void NudgeEntityTowardsPortalPlane(Entity& ent,
 void GenerateTeleportChain(const PortalPair& pair,
                            Entity& ent,
                            size_t n_ent_children,
+                           bool change_ent_pos,
                            bool tp_from_blue,
                            TpChain& chain,
                            size_t n_max_teleports);

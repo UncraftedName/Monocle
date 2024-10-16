@@ -299,15 +299,12 @@ TEST_CASE("Teleport chain results in VAG")
     const int n_teleports_success = 3;
 
     for (int n_max_teleports = 0; n_max_teleports < n_teleports_success + 2; n_max_teleports++) {
-        char section_name[32];
-        snprintf(section_name, sizeof section_name, "teleport limit is %d", n_max_teleports);
-
-        SECTION(section_name)
+        DYNAMIC_SECTION("teleport limit is " << n_max_teleports)
         {
             Vector target_vag_pos = pp.Teleport(player.GetCenter(), true);
 
             TpChain chain;
-            GenerateTeleportChain(pp, player, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, false, chain, n_max_teleports);
+            GenerateTeleportChain(pp, player, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, false, chain, n_max_teleports);
             int n_actual_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
 
             REQUIRE(chain.max_tps_exceeded == (n_actual_teleports < n_teleports_success));
@@ -371,15 +368,12 @@ TEST_CASE("Teleport chain results in 5 teleports")
     const int n_teleports_success = 5;
 
     for (int n_max_teleports = 0; n_max_teleports < n_teleports_success + 2; n_max_teleports++) {
-        char section_name[32];
-        snprintf(section_name, sizeof section_name, "teleport limit is %d", n_max_teleports);
-
-        SECTION(section_name)
+        DYNAMIC_SECTION("teleport limit is " << n_max_teleports)
         {
             Vector target_vag_pos = pp.Teleport(player.GetCenter(), true);
 
             TpChain chain;
-            GenerateTeleportChain(pp, player, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, false, chain, n_max_teleports);
+            GenerateTeleportChain(pp, player, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, false, chain, n_max_teleports);
             int n_actual_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
 
             REQUIRE(chain.max_tps_exceeded == (n_actual_teleports < n_teleports_success));
@@ -568,7 +562,7 @@ TEST_CASE("SPT with IPC")
 
         pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
         Entity player{blue.pos};
-        GenerateTeleportChain(pp, player, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, chain, 3);
+        GenerateTeleportChain(pp, player, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, true, chain, 3);
         // only handle basic teleports and simple VAGs for now
         if (chain.max_tps_exceeded || (chain.cum_primary_tps != 1 && chain.cum_primary_tps != -1))
             continue;
@@ -587,13 +581,13 @@ TEST_CASE("SPT with IPC")
         conn.RecvAck();
         // clang-format on
 
-        // timescale 1: sleep for 350ms, timescale 20: sleep for 1ms lol
+        // timescale 1: sleep for 350ms, timescale 20: sleep for 0ms lol
         // std::this_thread::sleep_for(std::chrono::milliseconds(350));
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
         conn.SendCmd("spt_ipc_properties 0 m_vecOrigin");
-        std::this_thread::sleep_for(std::chrono::milliseconds(2)); // everything breaks without this :)
         conn.RecvAck();
+        if (conn.recvLen <= conn.off)
+            conn.NextRecvMsg();
 
         Vector player_pos{};
         int n_args = _snscanf_s(conn.buf + conn.off,

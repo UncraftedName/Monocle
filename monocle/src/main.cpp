@@ -95,7 +95,7 @@ static void PlotUlpDistribution()
         };
         pp.CalcTpMatrices(PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION);
         Entity ent{pp.blue.pos};
-        GenerateTeleportChain(pp, ent, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, chain, 3);
+        GenerateTeleportChain(pp, ent, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, true, chain, 3);
         if (chain.max_tps_exceeded)
             continue;
         assert(chain.ulp_diffs[1].ax != ULP_DIFF_TOO_LARGE_AX);
@@ -163,7 +163,7 @@ static void GenerateResultsDistributionsToFile()
                              pp.blue.r * rng.next_float(-PORTAL_HALF_WIDTH * .5f, PORTAL_HALF_WIDTH * .5f) +
                              pp.blue.u * rng.next_float(-PORTAL_HALF_HEIGHT * .5f, PORTAL_HALF_HEIGHT * .5f);
             Entity ent{ent_pos};
-            GenerateTeleportChain(pp, ent, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, chain, 3);
+            GenerateTeleportChain(pp, ent, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, true, chain, 3);
             if (chain.max_tps_exceeded)
                 results[RESULT_UNKNOWN]++;
             else if (chain.cum_primary_tps == 1)
@@ -220,7 +220,7 @@ static void CreateOverlayPortalImage(const PortalPair& pair, const char* file_na
                 Vector r_off = p.r * mx;
                 Entity ent{p.pos + r_off + u_off};
 
-                GenerateTeleportChain(pair, ent, N_CHILDREN_PLAYER_WITHOUT_PORTAL_GUN, from_blue, chain, 3);
+                GenerateTeleportChain(pair, ent, true, N_CHILDREN_PLAYER_WITHOUT_PORTAL_GUN, from_blue, chain, 3);
                 pixel& pix = pixels[x_res * y + x];
                 pix.a = 255;
                 if (chain.max_tps_exceeded)
@@ -266,8 +266,7 @@ static void FindVagIn04()
         float r = rng.next_float(-PORTAL_HALF_WIDTH * 0.5f, PORTAL_HALF_WIDTH * 0.5f);
         float u = rng.next_float(-PORTAL_HALF_HEIGHT * 0.5f, PORTAL_HALF_HEIGHT * 0.5f);
         Entity ent{pp.blue.pos + pp.blue.r * r + pp.blue.u * u};
-        Entity ent_copy = ent;
-        GenerateTeleportChain(pp, ent, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, chain, 3);
+        GenerateTeleportChain(pp, ent, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, false, true, chain, 3);
         if (chain.max_tps_exceeded)
             continue;
         if (chain.cum_primary_tps != -1)
@@ -278,7 +277,7 @@ static void FindVagIn04()
         if (t.x > target_maxs.x || t.y > target_maxs.y || t.z > target_maxs.z)
             continue;
         pp.PrintNewlocationCmd();
-        ent_copy.PrintSetposCmd();
+        ent.PrintSetposCmd();
         const char* file_name = "04_blue.tga";
         printf("Found portal, generating overlay image\n");
         CreateOverlayPortalImage(pp, file_name, 1000, true);
