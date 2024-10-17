@@ -202,7 +202,8 @@ static void CreateOverlayPortalImage(const PortalPair& pair, const char* file_na
         uint8_t b, g, r, a;
     };
     std::vector<pixel> pixels{y_res * x_res};
-    ctpl::thread_pool pool{};
+    int n_threads = std::thread::hardware_concurrency();
+    ctpl::thread_pool pool{n_threads ? n_threads : 4};
     for (size_t y = 0; y < y_res; y++) {
 
         float oy = PORTAL_HALF_HEIGHT * (-1 + 1.f / y_res);
