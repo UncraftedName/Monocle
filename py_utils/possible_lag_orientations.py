@@ -55,7 +55,7 @@ def lag_possible(entry_pitch, exit_pitch, shove_into_portal: float = 0):
 def do_plot():
     grid_res = np.linspace(-180, 180, 361)
     X, Y = np.meshgrid(grid_res, grid_res)
-    units_into_portal = 20  # ~34 becomes impossible to do LAG/AAG
+    units_into_portal = 0  # ~34 becomes impossible to do LAG/AAG
     Z = np.vectorize(lambda x, y: lag_possible(x, y, units_into_portal))(X, Y)
 
     cmap = ListedColormap(['black', 'pink'])
@@ -78,9 +78,39 @@ def do_plot():
     ))
     cbar = plt.colorbar(ticks=[0, 1])
     cbar.ax.set_yticklabels(['not possible', 'possible'])
-    plt.title(f'Player {units_into_portal} units behind portal plane (vel≈{
-              units_into_portal / 0.015:.2f})')
-    # plt.title('Player at portal center')
+
+    lag_19 = np.array((90, -44.99942))
+    aag_e01 = np.array((15.945395, -90))
+    aag_e02 = np.array((60.141273, -90))
+    ag_angles = np.array((lag_19, aag_e01, aag_e02))
+    plt.scatter(ag_angles[:, 0], ag_angles[:, 1], color='red')
+    plt.annotate(
+        '19 LAG',
+        xy=lag_19,
+        textcoords='offset pixels',
+        xytext=(30, 0),
+        verticalalignment='center',
+        arrowprops={'arrowstyle': '->'},
+    )
+    plt.annotate(
+        'E01 AAG',
+        xy=aag_e01,
+        textcoords='offset pixels',
+        xytext=(0, -30),
+        horizontalalignment='left',
+        arrowprops={'arrowstyle': '->'},
+    )
+    plt.annotate(
+        'E02 AAG',
+        xy=aag_e02,
+        textcoords='offset pixels',
+        xytext=(15, -45),
+        horizontalalignment='left',
+        arrowprops={'arrowstyle': '->'},
+    )
+
+    # plt.title(f'Player {units_into_portal} units behind portal plane (vel≈{units_into_portal / 0.015:.2f})')
+    plt.title('Player at portal center')
     plt.xlabel('entry pitch')
     plt.ylabel('exit pitch')
     plt.show()
