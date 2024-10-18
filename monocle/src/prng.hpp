@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdint.h>
 #include <assert.h>
 
@@ -52,6 +54,13 @@ public:
     // [a, b]
     float next_float(float a, float b)
     {
+        assert(b > a);
         return (*this)() / static_cast<float>(UINT32_MAX) * (b - a) + a;
+    }
+
+    template <typename Container>
+    auto& next_elem(const Container& container)
+    {
+        return container[next_int(0, container.size())];
     }
 };

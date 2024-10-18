@@ -11,6 +11,7 @@
 #include "tga.hpp"
 #include "ctpl_stl.h"
 #include "time_scope.hpp"
+#include "vag_search.hpp"
 
 #include <vector>
 // #include <matplot/matplot.h>
@@ -286,11 +287,48 @@ static void FindVagIn04()
     }
 }
 
+static void FindVag18StartCeilCubeRoom()
+{
+    SearchSpace ss{
+        .blue_search{
+            .lock_opts{1023.96875f, 1023.9687f, 1023.9686f},
+            .type = SPT_WALL_ZN,
+            .pos_spaces{AABB{{605, -230, 1075}, {-90, -20, 930}}},
+        },
+        .orange_search{
+            .lock_opts{2559.9688f},
+            .type = SPT_WALL_XN,
+            .pos_spaces{
+                AABB{{2556, 284, 1278}, {2532, 611, 586}},
+                AABB{{2532, 611, 586}, {2624, 1522, 761}},
+                AABB{{2624, 1522, 761}, {2568, 1182, 1268}},
+            },
+        },
+        .target_space{AABB{{-1022, 620, 3310}, {-1395, 877, 3540}}},
+        .entry_pos_search = SEPF_ANY,
+        .valid_placement_orders{
+            PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+            PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION,
+        },
+        .tp_from_blue = true,
+        .tp_player = true,
+    };
+    small_prng rng{0};
+    auto result = ss.FindVag(rng, 100000);
+    if (!result) {
+        printf("no VAG found\n");
+        return;
+    }
+    (*result).print();
+    printf("generating overlay image...\n");
+    CreateOverlayPortalImage(result->pp, __FUNCTION__ ".tga", 1000, true);
+}
+
 int main()
 {
     SyncFloatingPointControlWord();
 
-    FindVagIn04();
+    FindVag18StartCeilCubeRoom();
 
     /*small_prng rng{2};
     TpChain chain;
