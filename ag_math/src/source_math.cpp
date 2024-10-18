@@ -39,7 +39,7 @@ Portal::Portal(const Vector& v, const QAngle& q) : pos{v}, ang{q}
     AngleMatrix(&ang, &pos, &mat);
 
     // CPortalSimulator::MoveTo
-    // forward, backward, up, down, left, right
+    // outward facing placnes: forward, backward, up, down, left, right
     hole_planes[0].n = f;
     hole_planes[0].d = plane.d - 0.5f;
     hole_planes[1].n = -f;
@@ -52,14 +52,14 @@ Portal::Portal(const Vector& v, const QAngle& q) : pos{v}, ang{q}
     hole_planes[4].d = -r.Dot(pos - r * (PORTAL_HALF_WIDTH * .98f));
     hole_planes[5].n = r;
     hole_planes[5].d = r.Dot(pos + r * (PORTAL_HALF_WIDTH * .98f));
-    // SignbitsForPlane & setting the type
+    // SignbitsForPlane & setting the type; game uses .999f for the type, but I need tighter tolerances
     for (int i = 0; i < 6; i++) {
         hole_planes_bits[i].sign = 0;
         hole_planes_bits[i].type = 3;
         for (int j = 0; j < 3; j++) {
             if (hole_planes[i].n[j] < 0)
                 hole_planes_bits[i].sign |= 1 << j;
-            else if (fabsf(hole_planes[i].n[j]) >= 0.999f)
+            else if (fabsf(hole_planes[i].n[j]) >= 0.999999f)
                 hole_planes_bits[i].type = j;
         }
     }
@@ -165,6 +165,7 @@ Vector PortalPair::Teleport(const Vector& pt, bool tp_from_blue) const
 
 int BoxOnPlaneSide(const Vector& mins, const Vector& maxs, const VPlane& p, plane_bits bits)
 {
+    // this optmization can be error-prone for slightly angled planes far away from the origin
     if (bits.type < 3) {
         if (p.d <= mins[bits.type])
             return PSR_FRONT;
