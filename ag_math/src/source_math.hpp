@@ -127,14 +127,13 @@ struct Vector {
         return ((float*)this)[i];
     }
 
-    constexpr float Dot(const Vector& v) const
+    float constexpr Dot(const Vector& v) const
     {
-        // may not match game - game may calculate (x+y)+z or x+(y+z), which might matter idk
-        return x * v.x + y * v.y + z * v.z;
+        // hopefully this is enough to force the intermediate ops to be 53 bit, seems like (x+y)+z == x+(y+z)
+        return (float)((double)x * v.x + (double)y * v.y + (double)z * v.z);
     }
 
-    // may not match game's values exactly
-    constexpr float DistToSqr(const Vector& v) const
+    float DistToSqr(const Vector& v) const
     {
         Vector d = *this - v;
         return d.Dot(d);
@@ -273,9 +272,9 @@ struct Portal {
     Vector pos; // m_vecOrigin/m_vecAbsOrigin
     QAngle ang; // m_angAngles/m_angAbsAngles
 
-    Vector f, r, u;  // m_PortalSimulator.m_InternalData.Placement.vForward/vRight/vUp
-    VPlane plane;    // m_PortalSimulator.m_InternalData.Placement.PortalPlane
-    matrix3x4_t mat; // m_rgflCoordinateFrame
+    Vector f, r, u;      // m_PortalSimulator.m_InternalData.Placement.vForward/vRight/vUp
+    VPlane plane;        // m_PortalSimulator.m_InternalData.Placement.PortalPlane == CProp_portal::m_plane_Origin
+    matrix3x4_t mat;     // m_rgflCoordinateFrame
 
     // fHolePlanes as calculated in CPortalSimulator::MoveTo, not guaranteed to match game's values exactly
     VPlane hole_planes[6];

@@ -3,14 +3,16 @@
 
 #include "source_math.hpp"
 
-extern "C" void __cdecl AngleMatrix(const QAngle* angles, matrix3x4_t* matrix);
-extern "C" void __cdecl AngleVectors(const QAngle* angles, Vector* f, Vector* r, Vector* u);
-extern "C" void __cdecl MatrixInverseTR(const VMatrix* src, VMatrix* dst);
-extern "C" void __cdecl Vector3DMultiply(const VMatrix* src1, const Vector* src2, Vector* dst);
-extern "C" void __cdecl VMatrix__MatrixMul(const VMatrix* lhs, const VMatrix* rhs, VMatrix* out);
-extern "C" Vector* __cdecl VMatrix__operatorVec(const VMatrix* lhs, Vector* out, const Vector* vVec);
-extern "C" void __cdecl Portal_CalcPlane(const Vector* portal_pos, const Vector* portal_f, VPlane* out_plane);
-extern "C" bool __cdecl Portal_EntBehindPlane(const VPlane* portal_plane, const Vector* ent_center);
+extern "C" {
+void __cdecl AngleMatrix(const QAngle* angles, matrix3x4_t* matrix);
+void __cdecl AngleVectors(const QAngle* angles, Vector* f, Vector* r, Vector* u);
+void __cdecl MatrixInverseTR(const VMatrix* src, VMatrix* dst);
+void __cdecl Vector3DMultiply(const VMatrix* src1, const Vector* src2, Vector* dst);
+void __cdecl VMatrix__MatrixMul(const VMatrix* lhs, const VMatrix* rhs, VMatrix* out);
+Vector* __cdecl VMatrix__operatorVec(const VMatrix* lhs, Vector* out, const Vector* vVec);
+void __cdecl Portal_CalcPlane(const Vector* portal_pos, const Vector* portal_f, VPlane* out_plane);
+bool __cdecl Portal_EntBehindPlane(const VPlane* portal_plane, const Vector* ent_center);
+}
 
 static void AngleMatrix(const QAngle* angles, const Vector* position, matrix3x4_t* matrix)
 {
@@ -33,7 +35,7 @@ static void MatrixSetIdentity(VMatrix& dst)
 Portal::Portal(const Vector& v, const QAngle& q) : pos{v}, ang{q}
 {
     AngleVectors(&ang, &f, &r, &u);
-    Portal_CalcPlane(&pos, &f, &plane);
+    plane = VPlane{f, f.Dot(pos)};
     AngleMatrix(&ang, &pos, &mat);
 
     // CPortalSimulator::MoveTo
@@ -65,8 +67,7 @@ Portal::Portal(const Vector& v, const QAngle& q) : pos{v}, ang{q}
 
 bool Portal::ShouldTeleport(const Entity& ent, bool check_portal_hole) const
 {
-    Vector center = ent.GetCenter();
-    if (!Portal_EntBehindPlane(&plane, &center))
+    if (plane.n.Dot(ent.GetCenter()) >= plane.d)
         return false;
     if (!check_portal_hole)
         return true;

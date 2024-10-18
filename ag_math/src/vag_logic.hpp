@@ -36,8 +36,6 @@ struct VecUlpDiff {
 
 struct TpChain {
 
-    using portal_type = int;
-
     // the points to/from which the teleports happen, has n_teleports + 1 elems
     std::vector<Vector> pts;
     // ulps from each pt to behind the portal; only applicable if the point is near a portal,
@@ -54,7 +52,7 @@ struct TpChain {
     bool max_tps_exceeded;
 
     // internal teleport queue
-    std::deque<portal_type> _tp_queue;
+    std::deque<int> _tp_queue;
 
     void Clear()
     {
@@ -74,14 +72,16 @@ struct TpChain {
 * portal plane as determined by Portal::ShouldTeleport(), otherwise will move in front. Finds the
 * point which is closest to the portal plane.
 */
-void NudgeEntityTowardsPortalPlane(Entity& ent,
-                                   const Portal& portal,
-                                   bool nudge_behind,
-                                   bool change_ent_pos,
-                                   VecUlpDiff* ulp_diff);
+void NudgeEntityBehindPortalPlane(Entity& ent, const Portal& portal, bool change_ent_pos, VecUlpDiff* ulp_diff);
 
 #define N_CHILDREN_PLAYER_WITHOUT_PORTAL_GUN 1
 #define N_CHILDREN_PLAYER_WITH_PORTAL_GUN 2
+
+struct EntityInfo {
+    size_t n_ent_children;
+    bool set_ent_pos_through_chain;
+    bool origin_inbounds;
+};
 
 /*
 * Generates the chain of teleports that is produced within a single tick when an entity teleports.
@@ -95,10 +95,9 @@ void NudgeEntityTowardsPortalPlane(Entity& ent,
 * The number of children the entities has is only relevant for chains more complicated than a VAG.
 * The player normally has 2 (portal gun & view model).
 */
-void GenerateTeleportChain(const PortalPair& pair,
-                           Entity& ent,
-                           size_t n_ent_children,
-                           bool change_ent_pos,
+void GenerateTeleportChain(TpChain& chain,
+                           const PortalPair& pair,
                            bool tp_from_blue,
-                           TpChain& chain,
+                           Entity& ent,
+                           EntityInfo ent_info,
                            size_t n_max_teleports);

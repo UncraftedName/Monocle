@@ -96,7 +96,12 @@ static void PlotUlpDistribution()
         };
         pp.CalcTpMatrices(PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION);
         Entity ent{pp.blue.pos};
-        GenerateTeleportChain(pp, ent, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, true, chain, 3);
+        EntityInfo ent_info{
+            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+            .set_ent_pos_through_chain = true,
+            .origin_inbounds = false,
+        };
+        GenerateTeleportChain(chain, pp, true, ent, ent_info, 3);
         if (chain.max_tps_exceeded)
             continue;
         assert(chain.ulp_diffs[1].ax != ULP_DIFF_TOO_LARGE_AX);
@@ -164,7 +169,12 @@ static void GenerateResultsDistributionsToFile()
                              pp.blue.r * rng.next_float(-PORTAL_HALF_WIDTH * .5f, PORTAL_HALF_WIDTH * .5f) +
                              pp.blue.u * rng.next_float(-PORTAL_HALF_HEIGHT * .5f, PORTAL_HALF_HEIGHT * .5f);
             Entity ent{ent_pos};
-            GenerateTeleportChain(pp, ent, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, true, chain, 3);
+            EntityInfo ent_info{
+                .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+                .set_ent_pos_through_chain = true,
+                .origin_inbounds = false,
+            };
+            GenerateTeleportChain(chain, pp, true, ent, ent_info, 3);
             if (chain.max_tps_exceeded)
                 results[RESULT_UNKNOWN]++;
             else if (chain.cum_primary_tps == 1)
@@ -222,7 +232,12 @@ static void CreateOverlayPortalImage(const PortalPair& pair, const char* file_na
                 Vector r_off = p.r * mx;
                 Entity ent{p.pos + r_off + u_off};
 
-                GenerateTeleportChain(pair, ent, true, N_CHILDREN_PLAYER_WITHOUT_PORTAL_GUN, from_blue, chain, 3);
+                EntityInfo ent_info{
+                    .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+                    .set_ent_pos_through_chain = true,
+                    .origin_inbounds = false,
+                };
+                GenerateTeleportChain(chain, pair, true, ent, ent_info, 3);
                 pixel& pix = pixels[x_res * y + x];
                 pix.a = 255;
                 if (chain.max_tps_exceeded)
@@ -268,7 +283,12 @@ static void FindVagIn04()
         float r = rng.next_float(-PORTAL_HALF_WIDTH * 0.5f, PORTAL_HALF_WIDTH * 0.5f);
         float u = rng.next_float(-PORTAL_HALF_HEIGHT * 0.5f, PORTAL_HALF_HEIGHT * 0.5f);
         Entity ent{pp.blue.pos + pp.blue.r * r + pp.blue.u * u};
-        GenerateTeleportChain(pp, ent, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, false, true, chain, 3);
+        EntityInfo ent_info{
+            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+            .set_ent_pos_through_chain = false,
+            .origin_inbounds = true,
+        };
+        GenerateTeleportChain(chain, pp, true, ent, ent_info, 3);
         if (chain.max_tps_exceeded)
             continue;
         if (chain.cum_primary_tps != -1)
@@ -309,6 +329,11 @@ static void FindVag18StartCeilCubeRoom()
         .valid_placement_orders{
             PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
             PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION,
+        },
+        .ent_info{
+            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+            .set_ent_pos_through_chain = false,
+            .origin_inbounds = false,
         },
         .tp_from_blue = true,
         .tp_player = true,

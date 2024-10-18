@@ -3,11 +3,7 @@
 
 #include "vag_logic.hpp"
 
-void NudgeEntityTowardsPortalPlane(Entity& ent,
-                                   const Portal& portal,
-                                   bool nudge_behind,
-                                   bool change_ent_pos,
-                                   VecUlpDiff* ulp_diff)
+void NudgeEntityBehindPortalPlane(Entity& ent, const Portal& portal, bool change_ent_pos, VecUlpDiff* ulp_diff)
 {
     int nudge_axis;
     float biggest = -INFINITY;
@@ -24,11 +20,10 @@ void NudgeEntityTowardsPortalPlane(Entity& ent,
     Vector orig = ent.origin;
 
     for (int i = 0; i < 2; i++) {
-        bool inv_check = nudge_behind == (bool)i;
-        float nudge_towards = ent.origin[nudge_axis] + portal.plane.n[nudge_axis] * (inv_check ? -1.f : 1.f);
-        int ulp_diff_incr = inv_check ? -1 : 1;
+        float nudge_towards = ent.origin[nudge_axis] + portal.plane.n[nudge_axis] * (i ? -1.f : 1.f);
+        int ulp_diff_incr = i ? -1 : 1;
 
-        while (portal.ShouldTeleport(ent, false) != inv_check) {
+        while (portal.ShouldTeleport(ent, false) != (bool)i) {
             ent.origin[nudge_axis] = std::nextafterf(ent.origin[nudge_axis], nudge_towards);
             if (ulp_diff)
                 ulp_diff->Update(nudge_axis, ulp_diff_incr);
@@ -41,11 +36,11 @@ void NudgeEntityTowardsPortalPlane(Entity& ent,
 struct ChainGenerator {
 
     using portal_type = decltype(TpChain::_tp_queue)::value_type;
-    using func_type = portal_type;
 
-    static constexpr func_type FUNC_RECHECK_COLLISION = 0;
-    static constexpr func_type FUNC_TP_BLUE = 1;
-    static constexpr func_type FUNC_TP_ORANGE = 2;
+    static constexpr portal_type FUNC_RECHECK_COLLISION = 0;
+    static constexpr portal_type FUNC_TP_BLUE = 1;
+    static constexpr portal_type FUNC_TP_ORANGE = 2;
+    static constexpr portal_type PORTAL_NONE = 0;
 
     template <portal_type PORTAL>
     static constexpr portal_type OppositePortalType()
@@ -58,11 +53,12 @@ struct ChainGenerator {
 
     TpChain& chain;
     Entity& ent;
+    EntityInfo ent_info;
     const PortalPair& pp;
     size_t max_tps;
-    size_t n_ent_children;
     int n_queued_nulls;
     int touch_scope_depth; // CPortalTouchScope::m_nDepth, not fully implemented
+    portal_type owning_portal;
     bool blue_primary;
 
     template <portal_type PORTAL>
@@ -71,10 +67,11 @@ struct ChainGenerator {
         return blue_primary == (PORTAL == FUNC_TP_BLUE);
     }
 
-    // clang-format off
-    inline void PortalTouchScopeCtor() { ++touch_scope_depth; }
-    inline void PortalTouchScopeDtor() { --touch_scope_depth; CallQueued(); }
-    // clang-format on
+    template <portal_type PORTAL>
+    inline const Portal& GetPortal()
+    {
+        return PORTAL == FUNC_TP_BLUE ? pp.blue : pp.orange;
+    }
 
     void CallQueued()
     {
@@ -99,11 +96,25 @@ struct ChainGenerator {
         }
     }
 
+    template <portal_type PORTAL>
     void ReleaseOwnershipOfEntity(bool moving_to_linked)
     {
+        if (PORTAL != owning_portal)
+            return;
+        owning_portal = PORTAL_NONE;
         if (touch_scope_depth > 0)
-            for (size_t i = 0; i < n_ent_children + !moving_to_linked; i++)
+            for (size_t i = 0; i < ent_info.n_ent_children + !moving_to_linked; i++)
                 chain._tp_queue.push_back(FUNC_RECHECK_COLLISION);
+    }
+
+    template <portal_type PORTAL>
+    bool SharedEnvironmentCheck()
+    {
+        if (owning_portal == PORTAL_NONE || owning_portal == PORTAL)
+            return true;
+        Vector ent_center = ent.GetCenter();
+        return ent_center.DistToSqr(GetPortal<PORTAL>().pos) <
+               ent_center.DistToSqr(GetPortal<OppositePortalType<PORTAL>()>().pos);
     }
 
     template <portal_type PORTAL>
@@ -111,18 +122,30 @@ struct ChainGenerator {
     {
         if (chain.max_tps_exceeded)
             return;
-        PortalTouchScopeCtor();
-        if ((PORTAL == FUNC_TP_BLUE ? pp.blue : pp.orange).ShouldTeleport(ent, true)) {
+        ++touch_scope_depth;
+        if (owning_portal != PORTAL) {
+            if (SharedEnvironmentCheck<PORTAL>()) {
+                bool ent_in_front = GetPortal<PORTAL>().plane.n.Dot(ent.GetCenter()) > GetPortal<PORTAL>().plane.d;
+                bool player_stuck = ent.player ? !ent_info.origin_inbounds : false;
+                if (ent_in_front || player_stuck) {
+                    if (owning_portal != PORTAL && owning_portal != PORTAL_NONE)
+                        ReleaseOwnershipOfEntity<OppositePortalType<PORTAL>()>(false);
+                    owning_portal = PORTAL;
+                }
+            }
+        }
+        if (GetPortal<PORTAL>().ShouldTeleport(ent, true)) {
             chain.tps_queued[tps_queued_idx] += PortalIsPrimary<PORTAL>() ? 1 : -1;
             TeleportEntity<PORTAL>();
         }
-        PortalTouchScopeDtor();
+        if (--touch_scope_depth == 0)
+            CallQueued();
     }
 
     void EntityTouchPortal()
     {
-        PortalTouchScopeCtor();
-        PortalTouchScopeDtor();
+        if (touch_scope_depth == 0)
+            CallQueued();
     }
 
     template <portal_type PORTAL>
@@ -149,12 +172,13 @@ struct ChainGenerator {
         chain.ulp_diffs.emplace_back();
         if (chain.cum_primary_tps == 0 || chain.cum_primary_tps == 1) {
             auto& p_ulp_diff_from = (chain.cum_primary_tps == 0) == blue_primary ? pp.blue : pp.orange;
-            NudgeEntityTowardsPortalPlane(ent, p_ulp_diff_from, true, false, &chain.ulp_diffs.back());
+            NudgeEntityBehindPortalPlane(ent, p_ulp_diff_from, false, &chain.ulp_diffs.back());
         } else {
             chain.ulp_diffs.back().ax = ULP_DIFF_TOO_LARGE_AX;
         }
 
-        ReleaseOwnershipOfEntity(true);
+        ReleaseOwnershipOfEntity<PORTAL>(true);
+        owning_portal = OppositePortalType<PORTAL>();
 
         EntityTouchPortal();
         PortalTouchEntity<OppositePortalType<PORTAL>()>(tps_queued_idx);
@@ -163,33 +187,31 @@ struct ChainGenerator {
     }
 };
 
-// TODO this really needs to be broken up and does not function correct for more than 3 max teleports
-void GenerateTeleportChain(const PortalPair& pair,
-                           Entity& ent,
-                           size_t n_ent_children,
-                           bool set_ent_pos_through_chain,
+void GenerateTeleportChain(TpChain& chain,
+                           const PortalPair& pair,
                            bool tp_from_blue,
-                           TpChain& chain,
+                           Entity& ent,
+                           EntityInfo ent_info,
                            size_t n_max_teleports)
 {
     chain.Clear();
 
     chain.ulp_diffs.emplace_back();
-    NudgeEntityTowardsPortalPlane(ent, tp_from_blue ? pair.blue : pair.orange, true, true, &chain.ulp_diffs.back());
+    NudgeEntityBehindPortalPlane(ent, tp_from_blue ? pair.blue : pair.orange, true, &chain.ulp_diffs.back());
     chain.pts.push_back(ent.GetCenter());
     chain.tps_queued.push_back(0);
 
     Entity ent_copy = ent;
-    Entity& ref_ent = set_ent_pos_through_chain ? ent : ent_copy;
 
     ChainGenerator generator{
         .chain = chain,
-        .ent = ref_ent,
+        .ent = ent_info.set_ent_pos_through_chain ? ent : ent_copy,
+        .ent_info = ent_info,
         .pp = pair,
         .max_tps = n_max_teleports,
-        .n_ent_children = n_ent_children,
         .n_queued_nulls = 0,
         .touch_scope_depth = 0,
+        .owning_portal = tp_from_blue ? ChainGenerator::FUNC_TP_BLUE : ChainGenerator::FUNC_TP_ORANGE,
         .blue_primary = tp_from_blue,
     };
     if (tp_from_blue)

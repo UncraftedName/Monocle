@@ -248,7 +248,6 @@ TEST_CASE("Nudging point towards portal plane")
         if (fabsf(p.pos[i]) < 0.5f)
             return;
     int translate_mask = rng.next_int(0, 8);
-    bool nudge_behind = rng.next_bool();
     bool is_player = rng.next_bool();
     INFO("entity is " << (is_player ? "player" : "non-player"));
 
@@ -264,19 +263,15 @@ TEST_CASE("Nudging point towards portal plane")
     Entity ent = is_player ? Entity{pt} : Entity{pt, 0.f};
     Entity ent_copy = ent;
     VecUlpDiff ulp_diff;
-    NudgeEntityTowardsPortalPlane(ent, p, nudge_behind, true, &ulp_diff);
-    REQUIRE(nudge_behind == p.ShouldTeleport(ent, false));
-    if (nudge_behind) {
-        REQUIRE(p.ShouldTeleport(ent_copy, false) == (ulp_diff.diff >= 0));
-    } else {
-        REQUIRE(p.ShouldTeleport(ent_copy, false) == (ulp_diff.diff > 0));
-    }
+    NudgeEntityBehindPortalPlane(ent, p, true, &ulp_diff);
+    REQUIRE(p.ShouldTeleport(ent, false));
+    REQUIRE(p.ShouldTeleport(ent_copy, false) == (ulp_diff.diff >= 0));
 
     if (ulp_diff.ax > 0) {
         // now nudge across the portal boundary (requires an ulp diff from the previous step)
-        float target = ent.origin[ulp_diff.ax] + p.plane.n[ulp_diff.ax] * (nudge_behind ? 1 : -1);
+        float target = ent.origin[ulp_diff.ax] + p.plane.n[ulp_diff.ax];
         ent.origin[ulp_diff.ax] = std::nextafterf(ent.origin[ulp_diff.ax], target);
-        REQUIRE_FALSE(nudge_behind == p.ShouldTeleport(ent, false));
+        REQUIRE_FALSE(p.ShouldTeleport(ent, false));
     }
 }
 
@@ -304,7 +299,12 @@ TEST_CASE("Teleport chain results in VAG")
             Vector target_vag_pos = pp.Teleport(player.GetCenter(), true);
 
             TpChain chain;
-            GenerateTeleportChain(pp, player, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, false, chain, n_max_teleports);
+            EntityInfo ent_info{
+                .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+                .set_ent_pos_through_chain = true,
+                .origin_inbounds = false,
+            };
+            GenerateTeleportChain(chain, pp, false, player, ent_info, n_max_teleports);
             int n_actual_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
 
             REQUIRE(chain.max_tps_exceeded == (n_actual_teleports < n_teleports_success));
@@ -373,7 +373,12 @@ TEST_CASE("Teleport chain results in 5 teleports")
             Vector target_vag_pos = pp.Teleport(player.GetCenter(), true);
 
             TpChain chain;
-            GenerateTeleportChain(pp, player, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, false, chain, n_max_teleports);
+            EntityInfo ent_info{
+                .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+                .set_ent_pos_through_chain = true,
+                .origin_inbounds = false,
+            };
+            GenerateTeleportChain(chain, pp, false, player, ent_info, n_max_teleports);
             int n_actual_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
 
             REQUIRE(chain.max_tps_exceeded == (n_actual_teleports < n_teleports_success));
@@ -562,7 +567,12 @@ TEST_CASE("SPT with IPC")
 
         pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
         Entity player{blue.pos};
-        GenerateTeleportChain(pp, player, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, true, chain, 3);
+        EntityInfo ent_info{
+            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+            .set_ent_pos_through_chain = false,
+            .origin_inbounds = false,
+        };
+        GenerateTeleportChain(chain, pp, false, player, ent_info, 3);
         // only handle basic teleports and simple VAGs for now
         if (chain.max_tps_exceeded || (chain.cum_primary_tps != 1 && chain.cum_primary_tps != -1))
             continue;

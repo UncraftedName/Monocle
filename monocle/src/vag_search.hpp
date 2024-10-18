@@ -113,6 +113,7 @@ struct SearchSpace {
     AABB target_space;
     SearchEntryPosFlags entry_pos_search;
     std::vector<PlacementOrder> valid_placement_orders;
+    EntityInfo ent_info;
     bool tp_from_blue;
     bool tp_player;
 
@@ -134,7 +135,8 @@ struct SearchSpace {
             Vector ent_pos = p.pos + (p.r * rm + p.u * um) * .5f;
             st.ent = tp_player ? Entity{ent_pos} : Entity{ent_pos, 1.f};
 
-            GenerateTeleportChain(st.pp, st.ent, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, false, tp_from_blue, st.chain, 3);
+            assert(!ent_info.set_ent_pos_through_chain); // otherwise print() on the results will not be correct
+            GenerateTeleportChain(st.chain, st.pp, tp_from_blue, st.ent, ent_info, 3);
             if (st.chain.max_tps_exceeded)
                 continue;
             if (st.chain.cum_primary_tps != CUM_TP_VAG)
