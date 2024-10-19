@@ -118,7 +118,7 @@ struct ChainGenerator {
     }
 
     template <portal_type PORTAL>
-    void PortalTouchEntity(size_t tps_queued_idx)
+    void PortalTouchEntity()
     {
         if (chain.max_tps_exceeded)
             return;
@@ -135,7 +135,7 @@ struct ChainGenerator {
             }
         }
         if (GetPortal<PORTAL>().ShouldTeleport(ent, true)) {
-            chain.tps_queued[tps_queued_idx] += PortalIsPrimary<PORTAL>() ? 1 : -1;
+            chain.tps_queued.back() += PortalIsPrimary<PORTAL>() ? 1 : -1;
             TeleportEntity<PORTAL>();
         }
         if (--touch_scope_depth == 0)
@@ -165,7 +165,6 @@ struct ChainGenerator {
         chain.cum_primary_tps += PortalIsPrimary<PORTAL>() ? 1 : -1;
         pp.Teleport(ent, PORTAL == FUNC_TP_BLUE);
         chain.pts.push_back(ent.GetCenter());
-        size_t tps_queued_idx = chain.tps_queued.size();
         chain.tps_queued.push_back(0);
 
         // calc ulp diff to nearby portal
@@ -174,15 +173,15 @@ struct ChainGenerator {
             auto& p_ulp_diff_from = (chain.cum_primary_tps == 0) == blue_primary ? pp.blue : pp.orange;
             NudgeEntityBehindPortalPlane(ent, p_ulp_diff_from, false, &chain.ulp_diffs.back());
         } else {
-            chain.ulp_diffs.back().ax = ULP_DIFF_TOO_LARGE_AX;
+            chain.ulp_diffs.back().SetInvalid();
         }
 
         ReleaseOwnershipOfEntity<PORTAL>(true);
         owning_portal = OppositePortalType<PORTAL>();
 
         EntityTouchPortal();
-        PortalTouchEntity<OppositePortalType<PORTAL>()>(tps_queued_idx);
-        PortalTouchEntity<OppositePortalType<PORTAL>()>(tps_queued_idx);
+        PortalTouchEntity<OppositePortalType<PORTAL>()>();
+        PortalTouchEntity<OppositePortalType<PORTAL>()>();
         EntityTouchPortal();
     }
 };
@@ -215,9 +214,9 @@ void GenerateTeleportChain(TpChain& chain,
         .blue_primary = tp_from_blue,
     };
     if (tp_from_blue)
-        generator.PortalTouchEntity<ChainGenerator::FUNC_TP_BLUE>(0);
+        generator.PortalTouchEntity<ChainGenerator::FUNC_TP_BLUE>();
     else
-        generator.PortalTouchEntity<ChainGenerator::FUNC_TP_ORANGE>(0);
+        generator.PortalTouchEntity<ChainGenerator::FUNC_TP_ORANGE>();
     assert(chain.max_tps_exceeded || chain._tp_queue.empty());
     assert(generator.touch_scope_depth == 0);
 }

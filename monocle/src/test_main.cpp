@@ -265,7 +265,7 @@ TEST_CASE("Nudging point towards portal plane")
     VecUlpDiff ulp_diff;
     NudgeEntityBehindPortalPlane(ent, p, true, &ulp_diff);
     REQUIRE(p.ShouldTeleport(ent, false));
-    REQUIRE(p.ShouldTeleport(ent_copy, false) == (ulp_diff.diff >= 0));
+    REQUIRE(p.ShouldTeleport(ent_copy, false) == ulp_diff.PtWasBehindPlane());
 
     if (ulp_diff.ax > 0) {
         // now nudge across the portal boundary (requires an ulp diff from the previous step)
@@ -320,27 +320,27 @@ TEST_CASE("Teleport chain results in VAG")
                     REQUIRE(chain.tps_queued[3] == 0);
                     REQUIRE_THAT(chain.pts[3].DistToSqr(target_vag_pos), Catch::Matchers::WithinAbs(0, .5f));
                     REQUIRE_THAT(player.GetCenter().DistToSqr(target_vag_pos), Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE(chain.ulp_diffs[3].ax == ULP_DIFF_TOO_LARGE_AX);
+                    REQUIRE_FALSE(chain.ulp_diffs[3].Valid());
                     [[fallthrough]];
                 case 2:
                     REQUIRE(chain.tp_dirs[1] == false);
                     REQUIRE(chain.tps_queued[2] == 0);
                     REQUIRE_THAT(chain.pts[2].DistToSqr(pp.orange.pos), Catch::Matchers::WithinAbs(0, .5f));
                     REQUIRE(chain.ulp_diffs[2].ax == 0);
-                    REQUIRE(chain.ulp_diffs[2].diff < 0); // player in front of blue
+                    REQUIRE_FALSE(chain.ulp_diffs[2].PtWasBehindPlane());
                     [[fallthrough]];
                 case 1:
                     REQUIRE(chain.tp_dirs[0] == true);
                     REQUIRE(chain.tps_queued[1] == -2);
                     REQUIRE_THAT(chain.pts[1].DistToSqr(pp.blue.pos), Catch::Matchers::WithinAbs(0, .5f));
                     REQUIRE(chain.ulp_diffs[1].ax == 0);
-                    REQUIRE(chain.ulp_diffs[1].diff + 1 > 0); // player behind orange
+                    REQUIRE(chain.ulp_diffs[1].PtWasBehindPlane());
                     [[fallthrough]];
                 case 0:
                     REQUIRE(chain.tps_queued[0] == 1);
                     REQUIRE_THAT(chain.pts[0].DistToSqr(pp.orange.pos), Catch::Matchers::WithinAbs(0, .5f));
                     REQUIRE(chain.ulp_diffs[0].ax == 0);
-                    REQUIRE(chain.ulp_diffs[0].diff + 1 > 0);
+                    REQUIRE(chain.ulp_diffs[0].PtWasBehindPlane());
                     break;
                 default:
                     FAIL();
@@ -395,39 +395,39 @@ TEST_CASE("Teleport chain results in 5 teleports")
                     REQUIRE_THAT(chain.pts[5].DistToSqr(pp.blue.pos), Catch::Matchers::WithinAbs(0, .5f));
                     REQUIRE_THAT(player.GetCenter().DistToSqr(pp.blue.pos), Catch::Matchers::WithinAbs(0, .5f));
                     REQUIRE(chain.ulp_diffs[5].ax == 0);
-                    REQUIRE(chain.ulp_diffs[5].diff < 0); // player in front of orange
+                    REQUIRE_FALSE(chain.ulp_diffs[5].PtWasBehindPlane());
                     [[fallthrough]];
                 case 4:
                     REQUIRE(chain.tp_dirs[3] == true);
                     REQUIRE(chain.tps_queued[4] == 1);
                     REQUIRE_THAT(chain.pts[4].DistToSqr(pp.orange.pos), Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE(chain.ulp_diffs[4].ax == ULP_DIFF_TOO_LARGE_AX);
+                    REQUIRE(chain.ulp_diffs[4].PtWasBehindPlane());
                     [[fallthrough]];
                 case 3:
                     REQUIRE(chain.tp_dirs[2] == false);
                     REQUIRE(chain.tps_queued[3] == 0);
                     REQUIRE_THAT(chain.pts[3].DistToSqr(target_vag_pos), Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE(chain.ulp_diffs[3].ax == ULP_DIFF_TOO_LARGE_AX);
+                    REQUIRE_FALSE(chain.ulp_diffs[3].Valid());
                     [[fallthrough]];
                 case 2:
                     REQUIRE(chain.tp_dirs[1] == false);
                     REQUIRE(chain.tps_queued[2] == 1);
                     REQUIRE_THAT(chain.pts[2].DistToSqr(pp.orange.pos), Catch::Matchers::WithinAbs(0, .5f));
                     REQUIRE(chain.ulp_diffs[2].ax == 0);
-                    REQUIRE(chain.ulp_diffs[2].diff + 1 > 0); // player behind blue
+                    REQUIRE(chain.ulp_diffs[2].PtWasBehindPlane());
                     [[fallthrough]];
                 case 1:
                     REQUIRE(chain.tp_dirs[0] == true);
                     REQUIRE(chain.tps_queued[1] == -2);
                     REQUIRE_THAT(chain.pts[1].DistToSqr(pp.blue.pos), Catch::Matchers::WithinAbs(0, .5f));
                     REQUIRE(chain.ulp_diffs[1].ax == 0);
-                    REQUIRE(chain.ulp_diffs[1].diff + 1 > 0); // player behind orange
+                    REQUIRE(chain.ulp_diffs[1].PtWasBehindPlane());
                     [[fallthrough]];
                 case 0:
                     REQUIRE(chain.tps_queued[0] == 1);
                     REQUIRE_THAT(chain.pts[0].DistToSqr(pp.orange.pos), Catch::Matchers::WithinAbs(0, .5f));
                     REQUIRE(chain.ulp_diffs[0].ax == 0);
-                    REQUIRE(chain.ulp_diffs[0].diff + 1 > 0);
+                    REQUIRE(chain.ulp_diffs[0].PtWasBehindPlane());
                     break;
                 default:
                     FAIL();
@@ -442,7 +442,7 @@ TEST_CASE("Teleport chain results in 5 teleports")
 //     * chamber 09 - blue portal on opposite wall of orange, top left corner
 //     * setpos -127.96875385 -191.24299622 164.03125
 //     */
-//
+// 
 //     PortalPair pp{
 //         Vector{255.96875f, -161.01295f, 201.96877f},
 //         QAngle{-0.f, 180.f, 0.f},
@@ -452,7 +452,13 @@ TEST_CASE("Teleport chain results in 5 teleports")
 //     pp.CalcTpMatrices(PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED);
 //     Entity player{Vector{-127.96876f, -191.24300f, 182.03125f}};
 //     TpChain chain;
-//     GenerateTeleportChain(pp, player, false, chain, 50);
+//     EntityInfo ent_info{
+//         .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+//         .set_ent_pos_through_chain = true,
+//         .origin_inbounds = false,
+//     };
+//     GenerateTeleportChain(chain, pp, false, player, ent_info, 200);
+//     INFO("number of teleports: " << chain.tp_dirs.size());
 //     REQUIRE(chain.max_tps_exceeded);
 // }
 

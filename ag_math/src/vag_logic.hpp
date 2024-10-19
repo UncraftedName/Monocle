@@ -27,9 +27,23 @@ struct VecUlpDiff {
         ax = along;
         diff += by;
     }
-};
 
-#define ULP_DIFF_TOO_LARGE_AX (-2)
+    void SetInvalid()
+    {
+        ax = -666;
+    }
+
+    bool Valid() const
+    {
+        return ax != -666;
+    }
+
+    bool PtWasBehindPlane() const
+    {
+        assert(Valid());
+        return diff >= 0;
+    }
+};
 
 #define CUM_TP_NORMAL_TELEPORT 1
 #define CUM_TP_VAG (-1)
