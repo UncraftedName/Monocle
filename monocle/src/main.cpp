@@ -104,7 +104,7 @@ static void PlotUlpDistribution()
         GenerateTeleportChain(chain, pp, true, ent, ent_info, 3);
         if (chain.max_tps_exceeded)
             continue;
-        assert(chain.ulp_diffs[1].ax != ULP_DIFF_TOO_LARGE_AX);
+        assert(chain.ulp_diffs[1].Valid());
         ulp_diffs.push_back(chain.ulp_diffs[1].diff);
     }
 
@@ -237,17 +237,22 @@ static void CreateOverlayPortalImage(const PortalPair& pair, const char* file_na
                     .set_ent_pos_through_chain = true,
                     .origin_inbounds = false,
                 };
-                GenerateTeleportChain(chain, pair, true, ent, ent_info, 3);
+                size_t n_max_teleports = 10;
+                GenerateTeleportChain(chain, pair, true, ent, ent_info, n_max_teleports);
                 pixel& pix = pixels[x_res * y + x];
                 pix.a = 255;
                 if (chain.max_tps_exceeded)
                     pix.r = pix.g = pix.b = 0;
-                else if (chain.cum_primary_tps == 1)
+                else if (chain.cum_primary_tps == 0)
                     pix.r = pix.g = pix.b = 125;
-                else if (chain.cum_primary_tps == -1)
-                    pix.g = 255;
+                else if (chain.cum_primary_tps == 1)
+                    pix.r = pix.g = pix.b = 255;
+                else if (chain.cum_primary_tps < 0 && chain.cum_primary_tps >= -3)
+                    pix.r = 85 * -chain.cum_primary_tps;
+                else if (chain.cum_primary_tps > 1 && chain.cum_primary_tps <= 4)
+                    pix.g = 85 * (chain.cum_primary_tps - 1);
                 else
-                    assert(0);
+                    pix.b = 255;
             }
         });
     }
@@ -349,11 +354,46 @@ static void FindVag18StartCeilCubeRoom()
     CreateOverlayPortalImage(result->pp, __FUNCTION__ ".tga", 1000, true);
 }
 
+static void FindComplexChain()
+{
+    small_prng rng{0};
+    AABB pos_space{Vector{30, 30, 750}, Vector{400, 400, 1000}};
+    TpChain chain;
+    for (int i = 0; i < 1000000; i++) {
+        PortalPair pp{
+            pos_space.RandomPtInBox(rng),
+            QAngle{0, rng.next_int(-2, 2) * 90.f, 0},
+            pos_space.RandomPtInBox(rng),
+            QAngle{0, rng.next_int(-2, 2) * 90.f, 0},
+        };
+        if (pp.blue.pos.DistToSqr(pp.orange.pos) < 200 * 200)
+            continue;
+        pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
+        Entity ent{pp.blue.pos};
+        EntityInfo ent_info{
+            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+            .set_ent_pos_through_chain = false,
+            .origin_inbounds = true,
+        };
+        GenerateTeleportChain(chain, pp, true, ent, ent_info, 10);
+        if (chain.max_tps_exceeded)
+            continue;
+        if (chain.cum_primary_tps >= -1 && chain.cum_primary_tps <= 1)
+            continue;
+        printf("iteration %u, %u teleports, %d cum teleports\n", i, chain.tp_dirs.size(), chain.cum_primary_tps);
+        pp.PrintNewlocationCmd();
+        ent.PrintSetposCmd();
+        printf("generating overlay image...\n");
+        CreateOverlayPortalImage(pp, "complex_chain.tga", 1000, true);
+        break;
+    }
+}
+
 int main()
 {
     SyncFloatingPointControlWord();
 
-    FindVag18StartCeilCubeRoom();
+    FindComplexChain();
 
     /*small_prng rng{2};
     TpChain chain;

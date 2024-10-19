@@ -20,6 +20,11 @@ struct AABB {
     {
         return pt.x > mins.x && pt.y > mins.y && pt.z > mins.z && pt.x < maxs.x && pt.y < maxs.y && pt.z < maxs.z;
     }
+
+    Vector RandomPtInBox(small_prng& rng) const
+    {
+        return {rng.next_float(mins[0], maxs[0]), rng.next_float(mins[1], maxs[1]), rng.next_float(mins[2], maxs[2])};
+    }
 };
 
 enum SearchPortalType {
