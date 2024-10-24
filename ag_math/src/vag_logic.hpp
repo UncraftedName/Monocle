@@ -50,7 +50,7 @@ struct VecUlpDiff {
 
 struct TpChain {
 
-    // the points to/from which the teleports happen, has n_teleports + 1 elems
+    // the center of the entity to/from which the teleports happen, has n_teleports + 1 elems
     std::vector<Vector> pts;
     // ulps from each pt to behind the portal; only applicable if the point is near a portal,
     // otherwise will have ax=ULP_DIFF_TOO_LARGE_AX; has n_teleports + 1 elems

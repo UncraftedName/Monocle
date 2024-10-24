@@ -442,7 +442,7 @@ TEST_CASE("Teleport chain results in 5 teleports")
 //     * chamber 09 - blue portal on opposite wall of orange, top left corner
 //     * setpos -127.96875385 -191.24299622 164.03125
 //     */
-// 
+//
 //     PortalPair pp{
 //         Vector{255.96875f, -161.01295f, 201.96877f},
 //         QAngle{-0.f, 180.f, 0.f},
@@ -547,6 +547,7 @@ TEST_CASE("SPT with IPC")
     conn.SendCmd(
         "sv_cheats 1; spt_prevent_vag_crash 1; spt_focus_nosleep 1; spt_noclip_noslowfly 1; host_timescale 20");
     conn.RecvAck();
+    std::this_thread::sleep_for(std::chrono::milliseconds(25));
 
     small_prng rng;
     TpChain chain;
@@ -578,7 +579,7 @@ TEST_CASE("SPT with IPC")
             .set_ent_pos_through_chain = false,
             .origin_inbounds = false,
         };
-        GenerateTeleportChain(chain, pp, false, player, ent_info, 3);
+        GenerateTeleportChain(chain, pp, true, player, ent_info, 3);
         // only handle basic teleports and simple VAGs for now
         if (chain.max_tps_exceeded || (chain.cum_primary_tps != 1 && chain.cum_primary_tps != -1))
             continue;
@@ -597,8 +598,9 @@ TEST_CASE("SPT with IPC")
         conn.RecvAck();
         // clang-format on
 
-        // timescale 1: sleep for 350ms, timescale 20: sleep for 0ms lol
+        // timescale 1: sleep for 350ms, timescale 20: sleep for 10ms lol
         // std::this_thread::sleep_for(std::chrono::milliseconds(350));
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
         conn.SendCmd("spt_ipc_properties 0 m_vecOrigin");
         conn.RecvAck();
@@ -614,14 +616,12 @@ TEST_CASE("SPT with IPC")
                                 &player_pos.x,
                                 &player_pos.y,
                                 &player_pos.z);
-        // if this fails, you may need to increase the delay of the last sleep or just rerun the test again
         REQUIRE(n_args == 3);
 
         INFO("iteration " << iteration);
-        if (chain.cum_primary_tps == CUM_TP_VAG)
-            REQUIRE(player_pos.DistToSqr(player.origin) < 100 * 100);
-        else
-            REQUIRE(player_pos.DistToSqr(pp.orange.pos) < 100 * 100);
+        INFO("expected " << (chain.cum_primary_tps == CUM_TP_VAG ? "VAG" : "normal teleport"));
+        Entity expected_pos{chain.pts.back()};
+        REQUIRE(player_pos.DistToSqr(expected_pos.origin) < 100 * 100);
         printf("iteration %d: %s", iteration, chain.cum_primary_tps == CUM_TP_VAG ? "VAG\n" : "Normal teleport\n");
         iteration++;
     }

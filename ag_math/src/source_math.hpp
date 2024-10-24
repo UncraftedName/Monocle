@@ -1,14 +1,13 @@
 #pragma once
 
 #include <float.h>
-#include <charconv>
 #include <array>
 
 #include "math.h"
 #include "stdio.h"
 #include "assert.h"
 
-#define F_TO_STR_BUF_SIZE 24
+#define F_FMT "%.9g"
 
 #define PORTAL_HALF_WIDTH 32.0f
 #define PORTAL_HALF_HEIGHT 54.0f
@@ -32,24 +31,21 @@ inline void SyncFloatingPointControlWord()
 template <size_t R, size_t C>
 static void PrintMatrix(const float (&arr)[R][C])
 {
-    char buf[F_TO_STR_BUF_SIZE];
     int fmtLens[R][C]{};
     int maxLens[C]{};
     for (int i = 0; i < C; i++) {
         for (int j = 0; j < R; j++) {
-            fmtLens[j][i] = std::to_chars(buf, buf + sizeof buf, arr[j][i]).ptr - buf;
+            fmtLens[j][i] = snprintf(nullptr, 0, F_FMT, arr[j][i]);
             if (fmtLens[j][i] > maxLens[i])
                 maxLens[i] = fmtLens[j][i];
         }
     }
     for (int j = 0; j < R; j++) {
         for (int i = 0; i < C; i++) {
-            auto end = std::to_chars(buf, buf + sizeof buf, arr[j][i]).ptr;
-            printf("%*s%.*s%s",
+            printf("%*s" F_FMT "%s",
                    maxLens[i] - fmtLens[j][i],
                    "",
-                   end - buf,
-                   buf,
+                   arr[j][i],
                    i == C - 1 ? (j == R - 1 ? "" : "\n") : ", ");
         }
     }
@@ -67,21 +63,7 @@ struct Vector {
 
     void print() const
     {
-        char buf[(F_TO_STR_BUF_SIZE + 2) * 3];
-        auto cur = buf;
-        auto end = buf + sizeof buf;
-
-        cur++[0] = '<';
-        cur = std::to_chars(cur, end, x).ptr;
-        cur++[0] = ',';
-        cur++[0] = ' ';
-        cur = std::to_chars(cur, end, y).ptr;
-        cur++[0] = ',';
-        cur++[0] = ' ';
-        cur = std::to_chars(cur, end, z).ptr;
-        cur++[0] = '>';
-
-        printf("%.*s", cur - buf, buf);
+        printf(F_FMT " " F_FMT " " F_FMT, x, y, z);
     }
 
     Vector& operator+=(const Vector& v)
@@ -127,10 +109,17 @@ struct Vector {
         return ((float*)this)[i];
     }
 
-    float constexpr Dot(const Vector& v) const
+    double constexpr Dot(const Vector& v) const
     {
-        // hopefully this is enough to force the intermediate ops to be 53 bit, seems like (x+y)+z == x+(y+z)
-        return (float)((double)x * v.x + (double)y * v.y + (double)z * v.z);
+        /*
+        * Since vs2005 uses x87 ops for everything, the result of the dot product is secretly a
+        * double. This behavior is annoying to replicate here since newer versions of vs don't
+        * like to use the x87 ops and the result is truncated when it's stored in the st0 reg.
+        * Hopefully we can replicate this by returning a double. So long as the result is compared
+        * with floats I think it should be fine, otherwise we might have to worry about the order
+        * of the addition: (x+y)+z != x+(y+z) in general, but equal if converting double->float.
+        */
+        return (double)x * v.x + (double)y * v.y + (double)z * v.z;
     }
 
     float DistToSqr(const Vector& v) const
@@ -223,11 +212,9 @@ struct VPlane {
 
     void print() const
     {
-        char buf[F_TO_STR_BUF_SIZE];
-        auto end = std::to_chars(buf, buf + sizeof buf, d).ptr;
-        printf("(n=(");
+        printf("n=(");
         n.print();
-        printf("), d=%.*s", end - buf, buf);
+        printf("), d=" F_FMT, d);
     }
 };
 
@@ -272,9 +259,9 @@ struct Portal {
     Vector pos; // m_vecOrigin/m_vecAbsOrigin
     QAngle ang; // m_angAngles/m_angAbsAngles
 
-    Vector f, r, u;      // m_PortalSimulator.m_InternalData.Placement.vForward/vRight/vUp
-    VPlane plane;        // m_PortalSimulator.m_InternalData.Placement.PortalPlane == CProp_portal::m_plane_Origin
-    matrix3x4_t mat;     // m_rgflCoordinateFrame
+    Vector f, r, u;  // m_PortalSimulator.m_InternalData.Placement.vForward/vRight/vUp
+    VPlane plane;    // m_PortalSimulator.m_InternalData.Placement.PortalPlane == CProp_portal::m_plane_Origin
+    matrix3x4_t mat; // m_rgflCoordinateFrame
 
     // fHolePlanes as calculated in CPortalSimulator::MoveTo, not guaranteed to match game's values exactly
     VPlane hole_planes[6];
@@ -419,11 +406,8 @@ struct PortalPair {
             printf("ent_fire %s newlocation \"", i ? "blue" : "orange");
             for (int j = 0; j < 2; j++) {
                 const Vector& v = j ? *(Vector*)&p.ang : p.pos;
-                for (int k = 0; k < 3; k++) {
-                    char buf[F_TO_STR_BUF_SIZE];
-                    auto end = std::to_chars(buf, buf + sizeof buf, v[k]).ptr;
-                    printf("%.*s%s", end - buf, buf, j == 1 && k == 2 ? "\"\n" : " ");
-                }
+                for (int k = 0; k < 3; k++)
+                    printf(F_FMT "%s", v[k], j == 1 && k == 2 ? "\"\n" : " ");
             }
         }
     }

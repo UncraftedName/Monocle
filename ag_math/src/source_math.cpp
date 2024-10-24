@@ -35,7 +35,7 @@ static void MatrixSetIdentity(VMatrix& dst)
 Portal::Portal(const Vector& v, const QAngle& q) : pos{v}, ang{q}
 {
     AngleVectors(&ang, &f, &r, &u);
-    plane = VPlane{f, f.Dot(pos)};
+    plane = VPlane{f, (float)f.Dot(pos)};
     AngleMatrix(&ang, &pos, &mat);
 
     // CPortalSimulator::MoveTo
