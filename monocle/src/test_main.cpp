@@ -518,14 +518,24 @@ TEST_CASE("SPT with IPC")
             va_end(va);
         }
 
+        const char* BufPtr() const
+        {
+            return buf + off;
+        }
+
+        int BufLen() const
+        {
+            return recvLen - off;
+        }
+
         void NextRecvMsg()
         {
-            if (off < recvLen) {
-                off += strnlen(buf + off, recvLen - off) + 1;
-            } else {
+            if (BufLen() > 0)
+                off += strnlen(BufPtr(), BufLen()) + 1;
+            if (BufLen() <= 0) {
                 off = 0;
                 recvLen = recv(sock, buf, sizeof buf, 0);
-                if (recvLen == SOCKET_ERROR)
+                if (recvLen < 0 || recvLen >= sizeof buf)
                     SKIP("recv failed (" << recvLen << ")");
             }
         }
@@ -533,8 +543,7 @@ TEST_CASE("SPT with IPC")
         void RecvAck()
         {
             NextRecvMsg();
-            REQUIRE_FALSE(strcmp(buf + off, "{\"type\":\"ack\"}"));
-            NextRecvMsg();
+            REQUIRE_FALSE(strcmp(BufPtr(), "{\"type\":\"ack\"}"));
         }
 
         ~_TCPConnection()
@@ -598,18 +607,15 @@ TEST_CASE("SPT with IPC")
         conn.RecvAck();
         // clang-format on
 
-        // timescale 1: sleep for 350ms, timescale 20: sleep for 10ms lol
-        // std::this_thread::sleep_for(std::chrono::milliseconds(350));
+        // timescale 1: sleep for 350ms, timescale 20: sleep for 10ms
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
         conn.SendCmd("spt_ipc_properties 0 m_vecOrigin");
         conn.RecvAck();
-        if (conn.recvLen <= conn.off)
-            conn.NextRecvMsg();
-
+        conn.NextRecvMsg();
         Vector player_pos{};
-        int n_args = _snscanf_s(conn.buf + conn.off,
-                                conn.recvLen - conn.off,
+        int n_args = _snscanf_s(conn.BufPtr(),
+                                conn.BufLen(),
                                 "{\"entity\":{"
                                 "\"m_vecOrigin[0]\":%f,\"m_vecOrigin[1]\":%f,\"m_vecOrigin[2]\":%f"
                                 "},\"exists\":true,\"type\":\"ent\"}",
