@@ -410,126 +410,48 @@ static void DebugInfinite09Chain()
     GenerateTeleportChain(chain, pp, false, player, ent_info, 5000);
 }
 
+static void CreateSpinAnimation()
+{
+    small_prng rng{20};
+    AABB pos_space{Vector{30, 30, 750}, Vector{400, 400, 1000}};
+    TpChain chain;
+    for (int i = 0; i < 100000; i++) {
+        PortalPair pp{
+            pos_space.RandomPtInBox(rng),
+            QAngle{rng.next_float(-180.f, 180.f), -180.f, 0},
+            pos_space.RandomPtInBox(rng),
+            QAngle{rng.next_float(-180.f, 180.f), rng.next_float(-180.f, 180.f), 0},
+        };
+        if (pp.blue.pos.DistToSqr(pp.orange.pos) < 100 * 100)
+            continue;
+        pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
+        Entity ent{pp.blue.pos + pp.blue.r};
+        EntityInfo ent_info{
+            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+            .set_ent_pos_through_chain = true,
+            .origin_inbounds = false,
+        };
+        GenerateTeleportChain(chain, pp, true, ent, ent_info, 10);
+        if (chain.max_tps_exceeded || chain.cum_primary_tps != CUM_TP_NORMAL_TELEPORT)
+            continue;
+        ent = Entity{pp.blue.pos - pp.blue.r};
+        GenerateTeleportChain(chain, pp, true, ent, ent_info, 10);
+        if (chain.max_tps_exceeded || chain.cum_primary_tps != CUM_TP_VAG)
+            continue;
+        for (int i = -180; i < 180; i++) {
+            PortalPair pp2{pp.blue.pos, {pp.blue.ang.x, (float)i, 0}, pp.orange.pos, pp.orange.ang};
+            pp2.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
+            char name[32];
+            sprintf(name, "spin_anim/ang_%03d.tga", (360 + (i % 360)) % 360);
+            CreateOverlayPortalImage(pp2, name, 350, true);
+        }
+        break;
+    }
+}
+
 int main()
 {
     SyncFloatingPointControlWord();
 
-    DebugInfinite09Chain();
-
-    /*small_prng rng{2};
-    TpChain chain;
-
-    for (int i = 0; i < 100000; i++) {
-        constexpr float p_min = 650.f, p_max = 1200.f, a_min = -180.f, a_max = 180.f;
-
-        PortalPair pp{
-            Vector{rng.next_float(p_min, p_max), rng.next_float(p_min, p_max), rng.next_float(p_min, p_max)},
-            QAngle{0, rng.next_int(-2, 2) * 90.f, 0},
-            Vector{rng.next_float(p_min, p_max), rng.next_float(p_min, p_max), rng.next_float(p_min, p_max)},
-            QAngle{rng.next_float(-3, 3), rng.next_int(-2, 2) * 90.f, 0},
-        };
-
-        if (pp.blue.pos.DistToSqr(pp.orange.pos) < 300 * 300)
-            continue;
-
-        pp.CalcTpMatrices(PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION);
-
-        Entity e1{pp.blue.pos}, e2{pp.blue.pos + pp.blue.u};
-        GenerateTeleportChain(pp, e1, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, chain, 3);
-        if (chain.max_tps_exceeded)
-            continue;
-        int n1 = chain.cum_primary_tps;
-        GenerateTeleportChain(pp, e2, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, chain, 3);
-        if (chain.max_tps_exceeded)
-            continue;
-        if (n1 == chain.cum_primary_tps)
-            continue;
-        printf("found iteration %d\n", i);
-
-        using namespace matplot;
-
-        size_t y_res = 100;
-        size_t x_res = (size_t)(y_res * PORTAL_HALF_WIDTH / PORTAL_HALF_HEIGHT);
-        std::vector<std::vector<uint8_t>> im;
-
-        for (size_t y = 0; y < y_res; y++) {
-            im.emplace_back(x_res);
-            for (size_t x = 0; x < x_res; x++) {
-                float xp = ((float)x / (x_res - 1) - 0.5f) * 2 * PORTAL_HALF_WIDTH;
-                float yp = ((float)y / (y_res - 1) - 0.5f) * 2 * PORTAL_HALF_HEIGHT;
-                Entity ent{pp.blue.pos + pp.blue.r * xp + pp.blue.u * yp};
-                GenerateTeleportChain(pp, ent, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, chain, 3);
-                if (chain.max_tps_exceeded)
-                    im[y][x] = 0;
-                else
-                    im[y][x] = chain.tp_dirs.size();
-            }
-        }
-        imagesc(im);
-        colorbar();
-
-        show();
-
-        break;
-    }*/
-
-    /*small_prng rng{7};
-    int n_chains = 100000;
-    TpChain chain;
-    for (int i = 0; i < n_chains; i++) {
-        constexpr float p_min = 650.f, p_max = 1200.f, a_min = -180.f, a_max = 180.f;
-
-        PortalPair pp{
-            Vector{rng.next_float(p_min, p_max), rng.next_float(p_min, p_max), rng.next_float(p_min, p_max)},
-            QAngle{0, rng.next_float(a_min, a_max), 0},
-            Vector{rng.next_float(p_min, p_max), rng.next_float(p_min, p_max), rng.next_float(p_min, p_max)},
-            QAngle{0, rng.next_int(-1, 2) * 90.f, 0},
-        };
-        if (pp.blue.pos.DistToSqr(pp.orange.pos) < 300 * 300)
-            continue;
-
-        pp.CalcTpMatrices(PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION);
-        Entity ent{pp.blue.pos};
-        GenerateTeleportChain(pp, ent, N_CHILDREN_PLAYER_WITH_PORTAL_GUN, true, chain, 20);
-
-        if (chain.max_tps_exceeded)
-            continue;
-        if (chain.cum_primary_tps >= -1 && chain.cum_primary_tps <= 1)
-            continue;
-        if (pp.blue.pos.DistToSqr(chain.pts[chain.pts.size() - 1]) < 300 * 300)
-            continue;
-        if (pp.orange.pos.DistToSqr(chain.pts[chain.pts.size() - 1]) < 300 * 300)
-            continue;
-
-        // clang-format off
-        Vector sp = Entity{chain.pts[0]}.origin;
-        printf(
-            "iteration %d\n"
-            "%d primary teleports:\n"
-            "ent_fire blue   newlocation \"%.9g %.9g %.9g %.9g %.9g %.9g\"\n"
-            "ent_fire orange newlocation \"%.9g %.9g %.9g %.9g %.9g %.9g\"\n"
-            "setpos %.9g %.9g %.9g\n",
-            i,
-            chain.cum_primary_tps,
-            pp.orange.pos.x, pp.orange.pos.y, pp.orange.pos.z, pp.orange.ang.x, pp.orange.ang.y, pp.orange.ang.z,
-            pp.blue.pos.x, pp.blue.pos.y, pp.blue.pos.z, pp.blue.ang.x, pp.blue.ang.y, pp.blue.ang.z,
-            sp.x, sp.y, sp.z
-        );
-        break;
-        // clang-format on
-    };*/
-
-    /*printf("\n\n");
-
-    std::vector<int> cum;
-    cum.resize(chains.size());
-
-    std::transform(chains.cbegin(), chains.cend(), cum.begin(), [](const TpChain& chain) {
-        return chain.cum_primary_tps;
-    });
-
-    using namespace matplot;
-
-    auto h = hist(cum);
-    show();*/
+    CreateSpinAnimation();
 }

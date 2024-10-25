@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <filesystem>
 
 /// <summary> Writes an uncompressed 24 or 32 bit .tga image to the indicated file! </summary>
 /// <param name='filename'>I'd recommended you add a '.tga' to the end of this filename.</param>
@@ -20,19 +21,18 @@ void tga_write(const char* filename,
                uint8_t dataChannels = 4,
                uint8_t fileChannels = 3)
 {
-    FILE* fp = NULL;
-    fp = fopen(filename, "wb");
-    if (fp == NULL)
-        return;
+    std::filesystem::path file_path{filename};
+    if (!file_path.parent_path().empty())
+        std::filesystem::create_directories(file_path.parent_path());
+    std::ofstream file{file_path};
 
     // You can find details about TGA headers here: http://www.paulbourke.net/dataformats/tga/
     // clang-format off
 	uint8_t header[18] = { 0,0,2,0,0,0,0,0,0,0,0,0, (uint8_t)(width%256), (uint8_t)(width/256), (uint8_t)(height%256), (uint8_t)(height/256), (uint8_t)(fileChannels*8), 0x20 };
     // clang-format on
-    fwrite(&header, 18, 1, fp);
+    file.write((char*)header, sizeof header);
 
     for (uint32_t i = 0; i < width * height; i++)
         for (uint32_t b = 0; b < fileChannels; b++)
-            fputc(dataBGRA[(i * dataChannels) + (b % dataChannels)], fp);
-    fclose(fp);
+            file.put(dataBGRA[(i * dataChannels) + (b % dataChannels)]);
 }
