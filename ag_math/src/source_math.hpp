@@ -122,6 +122,7 @@ struct Vector {
         return (double)x * v.x + (double)y * v.y + (double)z * v.z;
     }
 
+    // probably not accurate to game code (double -> float truncation issue probably)
     float DistToSqr(const Vector& v) const
     {
         Vector d = *this - v;

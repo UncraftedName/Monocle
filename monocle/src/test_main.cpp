@@ -493,7 +493,7 @@ TEST_CASE("SPT with IPC")
             sockaddr_in server_addr{};
             server_addr.sin_family = AF_INET;
             inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr.s_addr);
-            server_addr.sin_port = htons(27182);
+            server_addr.sin_port = htons(spt_port);
 
             _cleanup_sock = true;
             if (connect(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
@@ -582,18 +582,28 @@ TEST_CASE("SPT with IPC")
         PortalPair pp{blue, orange};
 
         pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
-        Entity player{blue.pos};
+        Entity player_ent{blue.pos};
         EntityInfo ent_info{
             .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
             .set_ent_pos_through_chain = false,
             .origin_inbounds = false,
         };
-        GenerateTeleportChain(chain, pp, true, player, ent_info, 3);
+        GenerateTeleportChain(chain, pp, true, player_ent, ent_info, 3);
         // only handle basic teleports and simple VAGs for now
         if (chain.max_tps_exceeded || (chain.cum_primary_tps != 1 && chain.cum_primary_tps != -1))
             continue;
 
+        /*
+        * For some reason, some portals don't trigger the StartTouch/Touch call when we setpos on
+        * the portal boundary. The solution is to setpos right in front of it first, then setpos
+        * on the boundary. Using a single string with two setpos commands doesn't work (not sure
+        * how that works under the hood), but sending two separate setpos commands works.
+        * 
+        * TODO: figure out why this happens
+        */
+
         // clang-format off
+        Entity tmp_player_ent{blue.pos + blue.f};
         auto& bp = pp.blue.pos; auto& op = pp.orange.pos;
         auto& ba = pp.blue.ang; auto& oa = pp.orange.ang;
         conn.SendCmd(
@@ -602,10 +612,12 @@ TEST_CASE("SPT with IPC")
             "setpos %.9g %.9g %.9g",
             op.x, op.y, op.z, oa.x, oa.y, oa.z,
             bp.x, bp.y, bp.z, ba.x, ba.y, ba.z,
-            player.origin.x, player.origin.y, player.origin.z
+            tmp_player_ent.origin.x, tmp_player_ent.origin.y, tmp_player_ent.origin.z
         );
-        conn.RecvAck();
         // clang-format on
+        conn.RecvAck();
+        conn.SendCmd("setpos %.9g %.9g %.9g", player_ent.origin.x, player_ent.origin.y, player_ent.origin.z);
+        conn.RecvAck();
 
         // timescale 1: sleep for 350ms, timescale 20: sleep for 10ms
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -613,21 +625,21 @@ TEST_CASE("SPT with IPC")
         conn.SendCmd("spt_ipc_properties 0 m_vecOrigin");
         conn.RecvAck();
         conn.NextRecvMsg();
-        Vector player_pos{};
+        Vector actual_player_pos{};
         int n_args = _snscanf_s(conn.BufPtr(),
                                 conn.BufLen(),
                                 "{\"entity\":{"
                                 "\"m_vecOrigin[0]\":%f,\"m_vecOrigin[1]\":%f,\"m_vecOrigin[2]\":%f"
                                 "},\"exists\":true,\"type\":\"ent\"}",
-                                &player_pos.x,
-                                &player_pos.y,
-                                &player_pos.z);
+                                &actual_player_pos.x,
+                                &actual_player_pos.y,
+                                &actual_player_pos.z);
         REQUIRE(n_args == 3);
 
         INFO("iteration " << iteration);
         INFO("expected " << (chain.cum_primary_tps == CUM_TP_VAG ? "VAG" : "normal teleport"));
-        Entity expected_pos{chain.pts.back()};
-        REQUIRE(player_pos.DistToSqr(expected_pos.origin) < 100 * 100);
+        Entity expected_ent{chain.pts.back()};
+        REQUIRE(actual_player_pos.DistToSqr(expected_ent.origin) < 100 * 100);
         printf("iteration %d: %s", iteration, chain.cum_primary_tps == CUM_TP_VAG ? "VAG\n" : "Normal teleport\n");
         iteration++;
     }
