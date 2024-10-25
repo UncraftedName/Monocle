@@ -449,9 +449,39 @@ static void CreateSpinAnimation()
     }
 }
 
+static void FindInfiniteChain()
+{
+    small_prng rng{0};
+    AABB pos_space{Vector{30, 30, 750}, Vector{400, 400, 1000}};
+    TpChain chain;
+    for (int i = 0; i < 100000; i++) {
+        PortalPair pp{
+            pos_space.RandomPtInBox(rng),
+            QAngle{0, rng.next_int(-2, 2) * 90.f, 0},
+            pos_space.RandomPtInBox(rng),
+            QAngle{0, rng.next_int(-2, 2) * 90.f, 0},
+        };
+        if (pp.blue.pos.DistToSqr(pp.orange.pos) < 100 * 100)
+            continue;
+        pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
+        Entity player{pp.blue.pos};
+        EntityInfo ent_info{
+            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+            .set_ent_pos_through_chain = false,
+            .origin_inbounds = false,
+        };
+        GenerateTeleportChain(chain, pp, true, player, ent_info, 400000);
+        if (!chain.max_tps_exceeded)
+            continue;
+        pp.PrintNewlocationCmd();
+        player.PrintSetposCmd();
+        break;
+    }
+}
+
 int main()
 {
     SyncFloatingPointControlWord();
 
-    CreateSpinAnimation();
+    FindInfiniteChain();
 }
