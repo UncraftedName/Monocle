@@ -436,31 +436,32 @@ TEST_CASE("Teleport chain results in 5 teleports")
     }
 }
 
-// TEST_CASE("Teleport chain results in no free edicts")
-// {
-//     /*
-//     * chamber 09 - blue portal on opposite wall of orange, top left corner
-//     * setpos -127.96875385 -191.24299622 164.03125
-//     */
-//
-//     PortalPair pp{
-//         Vector{255.96875f, -161.01295f, 201.96877f},
-//         QAngle{-0.f, 180.f, 0.f},
-//         Vector{-127.96875f, -191.24300f, 182.03125f},
-//         QAngle{0.f, 0.f, 0.f},
-//     };
-//     pp.CalcTpMatrices(PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED);
-//     Entity player{Vector{-127.96876f, -191.24300f, 182.03125f}};
-//     TpChain chain;
-//     EntityInfo ent_info{
-//         .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-//         .set_ent_pos_through_chain = true,
-//         .origin_inbounds = false,
-//     };
-//     GenerateTeleportChain(chain, pp, false, player, ent_info, 200);
-//     INFO("number of teleports: " << chain.tp_dirs.size());
-//     REQUIRE(chain.max_tps_exceeded);
-// }
+TEST_CASE("Finite teleport chain results in free edicts")
+{
+    /*
+    * chamber 09 - blue portal on opposite wall of orange, top left corner
+    * setpos -127.96875385 -191.24299622 164.03125
+    */
+    PortalPair pp{
+        Vector{255.96875f, -161.01295f, 201.96877f},
+        QAngle{-0.f, 180.f, 0.f},
+        Vector{-127.96875f, -191.24300f, 182.03125f},
+        QAngle{0.f, 0.f, 0.f},
+    };
+    pp.CalcTpMatrices(PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED);
+    Entity player{Vector{-127.96876f, -191.24300f, 182.03125f}};
+    TpChain chain;
+    EntityInfo ent_info{
+        .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+        .set_ent_pos_through_chain = false,
+        .origin_inbounds = false,
+    };
+    GenerateTeleportChain(chain, pp, false, player, ent_info, 200);
+    REQUIRE_FALSE(chain.max_tps_exceeded);
+    REQUIRE(chain.tp_dirs.size() == 82);
+    REQUIRE(chain.cum_primary_tps == 0);
+    REQUIRE(chain.ulp_diffs.back().PtWasBehindPlane());
+}
 
 TEST_CASE("SPT with IPC")
 {

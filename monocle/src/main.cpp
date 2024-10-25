@@ -389,11 +389,32 @@ static void FindComplexChain()
     }
 }
 
+static void DebugInfinite09Chain()
+{
+    (void)freopen("vs_2022_infinite.txt", "w", stdout);
+
+    PortalPair pp{
+        Vector{255.96875f, -161.01295f, 201.96875f},
+        QAngle{-0.f, 180.f, 0.f},
+        Vector{-127.96875f, -191.24300f, 182.03125f},
+        QAngle{0.f, 0.f, 0.f},
+    };
+    pp.CalcTpMatrices(PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED);
+    Entity player{Vector{-127.96876f, -191.24300f, 182.03125f}};
+    TpChain chain;
+    EntityInfo ent_info{
+        .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+        .set_ent_pos_through_chain = true,
+        .origin_inbounds = false,
+    };
+    GenerateTeleportChain(chain, pp, false, player, ent_info, 5000);
+}
+
 int main()
 {
     SyncFloatingPointControlWord();
 
-    FindComplexChain();
+    DebugInfinite09Chain();
 
     /*small_prng rng{2};
     TpChain chain;
