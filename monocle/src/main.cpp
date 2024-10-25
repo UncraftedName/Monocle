@@ -238,7 +238,7 @@ static void CreateOverlayPortalImage(const PortalPair& pair, const char* file_na
                     .origin_inbounds = false,
                 };
                 size_t n_max_teleports = 10;
-                GenerateTeleportChain(chain, pair, true, ent, ent_info, n_max_teleports);
+                GenerateTeleportChain(chain, pair, from_blue, ent, ent_info, n_max_teleports);
                 pixel& pix = pixels[x_res * y + x];
                 pix.a = 255;
                 if (chain.max_tps_exceeded)
