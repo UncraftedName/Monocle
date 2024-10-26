@@ -479,9 +479,166 @@ static void FindInfiniteChain()
     }
 }
 
+static void FindVagIn09EleTop()
+{
+    SearchSpace ss{
+        .blue_search{
+            .lock_opts{
+                0.0312423706f,
+                0.0312497951f,
+                0.0312499776f,
+                0.03125f,
+                0.0312501229f,
+                0.0312502459f,
+                0.0312504061f,
+                0.0312505625f,
+                0.0312515162f,
+            },
+            .type = SPT_WALL_ZP,
+            .pos_spaces = {AABB{Vector{101, 771, 0}, Vector{-198, 880, 12}}},
+        },
+        .orange_search{
+            .locked = true,
+            .locked_pos{-127.96875f, -191.242996f, 182.03125f},
+            .locked_ang{0, 0, 0},
+        },
+        .target_space{Vector{-259, 752, 568}, Vector{391, 946, 740}},
+        .entry_pos_search = SEPF_LOWER,
+        .valid_placement_orders{
+            PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+            PlacementOrder::AFTER_LOAD,
+        },
+        .ent_info{
+            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+            .set_ent_pos_through_chain = false,
+            .origin_inbounds = false,
+        },
+        .tp_from_blue = false,
+        .tp_player = true,
+    };
+    small_prng rng{0};
+    auto sr = ss.FindVag(rng, 1000000);
+    if (sr)
+        sr->print();
+}
+
+static void FindVagIn09EleBottom()
+{
+    SearchSpace ss{
+        .blue_search{
+            .lock_opts{
+                0.0312423706f,
+                0.0312497951f,
+                0.0312499776f,
+                0.03125f,
+                0.0312501229f,
+                0.0312502459f,
+                0.0312504061f,
+                0.0312505625f,
+                0.0312515162f,
+            },
+            .type = SPT_WALL_ZP,
+            .pos_spaces = {AABB{Vector{843, -170, -5}, Vector{743, -1, 25}}},
+        },
+        .orange_search{
+            .locked = true,
+            .locked_pos{-127.96875f, -191.242996f, 182.03125f},
+            .locked_ang{0, 0, 0},
+        },
+        .target_space{Vector{-267, 962, -11}, Vector{-360, 720, 190}},
+        .entry_pos_search = SEPF_LOWER,
+        .valid_placement_orders{
+            PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+            PlacementOrder::AFTER_LOAD,
+        },
+        .ent_info{
+            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+            .set_ent_pos_through_chain = false,
+            .origin_inbounds = false,
+        },
+        .tp_from_blue = false,
+        .tp_player = true,
+    };
+    small_prng rng{0};
+    auto sr = ss.FindVag(rng, 1000000);
+    if (sr)
+        sr->print();
+}
+
+static void FindVagIn11()
+{
+    SearchSpace ss{
+        .blue_search{
+            .lock_opts{128.03125f},
+            .type = SPT_WALL_ZP,
+            .pos_spaces = {AABB{Vector{-860, 280, 175}, Vector{-551, -43, 127}}},
+        },
+        .orange_search{
+            .lock_opts{-1183.96875f},
+            .type = SPT_WALL_YP,
+            .pos_spaces = {AABB{Vector{-80, -1167, 285}, Vector{-536, -1193, 373}}},
+        },
+        .target_space{Vector{-600, -1260, 1647}, Vector{-369, -1413, 1762}},
+        .entry_pos_search = SEPF_LOWER,
+        .valid_placement_orders{
+            PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+            PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION,
+            PlacementOrder::AFTER_LOAD,
+        },
+        .ent_info{
+            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+            .set_ent_pos_through_chain = false,
+            .origin_inbounds = true,
+        },
+        .tp_from_blue = false,
+        .tp_player = true,
+    };
+    small_prng rng{0};
+    auto sr = ss.FindVag(rng, 1000000);
+    if (sr)
+        sr->print();
+}
+
+static void FindKnownVagIn11()
+{
+    SearchSpace ss{
+        .blue_search{
+            .lock_opts{383.96875f},
+            .type = SPT_WALL_ZN,
+            .pos_spaces = {AABB{Vector{-860, 280, 450}, Vector{-551, -43, 380}}},
+        },
+        .orange_search{
+            .lock_opts{
+                -64.03125f,
+                -64.0312653f,
+            },
+            .type = SPT_WALL_XN,
+            .pos_spaces = {AABB{Vector{-80, -816, 284}, Vector{-40, -1154, 509}}},
+        },
+        .target_space{Vector{-106, -1427, 1597}, Vector{-273, -1282, 1729}},
+        .entry_pos_search = SEPF_LOWER,
+        .valid_placement_orders{
+            PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+            PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION,
+            PlacementOrder::AFTER_LOAD,
+        },
+        .ent_info{
+            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+            .set_ent_pos_through_chain = false,
+            .origin_inbounds = true,
+        },
+        .tp_from_blue = false,
+        .tp_player = true,
+    };
+    small_prng rng{0};
+    auto sr = ss.FindVag(rng, 1000000);
+    if (sr)
+        sr->print();
+}
+
 int main()
 {
     SyncFloatingPointControlWord();
 
-    FindInfiniteChain();
+    FindVagIn09EleTop();
 }

@@ -41,8 +41,15 @@ struct SearchPortal {
     SearchPortalType type;
     std::vector<AABB> pos_spaces;
 
+    // if the portal is fixed in place
+    bool locked;
+    Vector locked_pos;
+    QAngle locked_ang;
+
     Portal Generate(small_prng& rng) const
     {
+        if (locked)
+            return Portal{locked_pos, locked_ang};
         QAngle ang;
         int lock_axis;
         switch (type) {
@@ -142,11 +149,24 @@ struct SearchSpace {
 
             assert(!ent_info.set_ent_pos_through_chain); // otherwise print() on the results will not be correct
             GenerateTeleportChain(st.chain, st.pp, tp_from_blue, st.ent, ent_info, 3);
+
+            if (i == 0) {
+                printf("sample portals:\n");
+                st.pp.PrintNewlocationCmd();
+                printf("sample player location:\n");
+                st.ent.PrintSetposCmd();
+                printf("expected result for %s: ", PlacementOrderStrs[(int)st.po]);
+                if (st.chain.max_tps_exceeded)
+                    printf("exceeded chain limit\n\n");
+                else
+                    printf("%d cum teleports\n\n", st.chain.cum_primary_tps);
+            }
+
             if (st.chain.max_tps_exceeded)
                 continue;
             if (st.chain.cum_primary_tps != CUM_TP_VAG)
                 continue;
-            if (!target_space.VectorInBox(*--st.chain.pts.cend()))
+            if (!target_space.VectorInBox(st.chain.pts.back()))
                 continue;
             return st;
         }
