@@ -203,7 +203,7 @@ static void GenerateResultsDistributionsToFile()
     of << "\n]\n}\n";
 }
 
-static void CreateOverlayPortalImage(const PortalPair& pair, const char* file_name, size_t y_res, bool from_blue)
+static void CreateOverlayPortalImage(const PortalPair& pair, const char* file_name, size_t y_res, bool from_blue, bool rand_nudge=false)
 {
     TIME_FUNC();
 
@@ -222,11 +222,13 @@ static void CreateOverlayPortalImage(const PortalPair& pair, const char* file_na
         float my = oy * (1 - 2 * ty);
         Vector u_off = p.u * my;
 
-        pool.push([x_res, u_off, y, from_blue, &p, &pair, &pixels](int) -> void {
+        pool.push([x_res, u_off, y, from_blue, &p, &pair, &pixels, rand_nudge](int) -> void {
+            small_prng rng{y};
             TpChain chain;
             for (size_t x = 0; x < x_res; x++) {
+                float rx = rand_nudge ? rng.next_float(-.1f, .1f) : 0.f;
                 float ox = PORTAL_HALF_WIDTH * (-1 + 1.f / x_res);
-                float tx = (float)x / (x_res - 1);
+                float tx = ((float)x + rx) / (x_res - 1);
                 float mx = ox * (1 - 2 * tx);
 
                 Vector r_off = p.r * mx;
@@ -475,6 +477,43 @@ static void FindInfiniteChain()
             continue;
         pp.PrintNewlocationCmd();
         player.PrintSetposCmd();
+        break;
+    }
+}
+
+static void FindFiniteChainThatGivesNFE()
+{
+    small_prng rng{0};
+    AABB pos_space{Vector{30, 30, 750}, Vector{400, 400, 1000}};
+    TpChain chain;
+    for (int i = 0; i < 1000000; i++) {
+        PortalPair pp{
+            pos_space.RandomPtInBox(rng),
+            QAngle{0, rng.next_int(-2, 2) * 90.f, 0},
+            pos_space.RandomPtInBox(rng),
+            QAngle{0, rng.next_int(-2, 2) * 90.f, 0},
+        };
+        if (pp.blue.pos.DistToSqr(pp.orange.pos) < 100 * 100)
+            continue;
+        pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
+        Entity player{pp.blue.pos};
+        EntityInfo ent_info{
+            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+            .set_ent_pos_through_chain = true,
+            .origin_inbounds = false,
+        };
+        GenerateTeleportChain(chain, pp, true, player, ent_info, 34);
+        if (chain.max_tps_exceeded)
+            continue;
+        if (chain.cum_primary_tps != 0)
+            continue;
+        VecUlpDiff diff;
+        NudgeEntityBehindPortalPlane(player, pp.blue, false, &diff);
+        if (!diff.PtWasBehindPlane())
+            continue;
+        printf("found chain of length %u on iteration %d\n", chain.tp_dirs.size(), i);
+        pp.PrintNewlocationCmd();
+        Entity{chain.pts.front()}.PrintSetposCmd();
         break;
     }
 }
