@@ -78,6 +78,44 @@ struct TpChain {
         max_tps_exceeded = false;
         _tp_queue.clear();
     }
+
+    void PrintTeleports() const
+    {
+        int min_cum = 0, max_cum = 0, cum = 0;
+        for (bool dir : tp_dirs) {
+            cum += dir ? 1 : -1;
+            min_cum = cum < min_cum ? cum : min_cum;
+            max_cum = cum > max_cum ? cum : max_cum;
+        }
+        int left_pad = pts.size() <= 1 ? 1 : (int)floor(log10(pts.size() - 1)) + 1;
+        cum = 0;
+        for (size_t i = 0; i <= tp_dirs.size(); i++) {
+            printf("%.*u) ", left_pad, i);
+            for (int c = min_cum; c <= max_cum; c++) {
+                VecUlpDiff diff = ulp_diffs[i];
+                if (c == cum) {
+                    if (c == 0)
+                        printf((i == 0 || diff.PtWasBehindPlane()) ? "0|>" : ".|0");
+                    else if (c == 1)
+                        printf(diff.PtWasBehindPlane() ? "<|1" : "1|.");
+                    else if (c < 0)
+                        printf("%d.", c);
+                    else
+                        printf(".%d.", c);
+                } else {
+                    if (c == 0)
+                        printf(".|>");
+                    else if (c == 1)
+                        printf("<|.");
+                    else
+                        printf("...");
+                }
+            }
+            putc('\n', stdout);
+            if (i < tp_dirs.size())
+                cum += tp_dirs[i] ? 1 : -1;
+        }
+    }
 };
 
 /*
