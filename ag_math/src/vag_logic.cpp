@@ -34,23 +34,6 @@ void NudgeEntityBehindPortalPlane(Entity& ent, const Portal& portal, bool change
         ent.origin = orig;
 }
 
-#define DEBUG_CHAIN 0
-
-struct _DEBUG_CHAIN_SCOPE {
-
-    void Log(const char* fmt, ...)
-    {
-#if DEBUG_CHAIN
-        va_list va;
-        va_start(va, fmt);
-        vfprintf(stdout, fmt, va);
-        va_end(va);
-#else
-        (void)fmt;
-#endif
-    }
-};
-
 struct ChainGenerator {
 
     using portal_type = decltype(TpChain::_tp_queue)::value_type;
@@ -146,11 +129,8 @@ struct ChainGenerator {
                 bool ent_in_front = GetPortal<PORTAL>().plane.n.Dot(ent.GetCenter()) > GetPortal<PORTAL>().plane.d;
                 bool player_stuck = ent.player ? !ent_info.origin_inbounds : false;
                 if (ent_in_front || player_stuck) {
-                    if (owning_portal != PORTAL && owning_portal != PORTAL_NONE) {
-                        _DEBUG_CHAIN_SCOPE _scope;
-                        _scope.Log("portal %d calling ReleaseOwnershipOfEntity from Touch\n", PORTAL);
+                    if (owning_portal != PORTAL && owning_portal != PORTAL_NONE)
                         ReleaseOwnershipOfEntity<OppositePortalType<PORTAL>()>(false);
-                    }
                     owning_portal = PORTAL;
                 }
             }
@@ -158,9 +138,6 @@ struct ChainGenerator {
         if (GetPortal<PORTAL>().ShouldTeleport(ent, true)) {
             chain.tps_queued.back() += PortalIsPrimary<PORTAL>() ? 1 : -1;
             TeleportEntity<PORTAL>();
-        } else {
-            _DEBUG_CHAIN_SCOPE _scope;
-            _scope.Log("portal %d ShouldTeleportTouchingEntity returned false\n", PORTAL);
         }
         if (--touch_scope_depth == 0)
             CallQueued();
@@ -176,9 +153,6 @@ struct ChainGenerator {
     void TeleportEntity()
     {
         if (touch_scope_depth > 0) {
-            _DEBUG_CHAIN_SCOPE _scope;
-            _scope.Log("portal %d queueing a teleport\n", PORTAL);
-
             chain._tp_queue.push_back(PORTAL);
             return;
         }
@@ -189,8 +163,6 @@ struct ChainGenerator {
         }
 
         Vector _pt = ent.GetCenter();
-        _DEBUG_CHAIN_SCOPE _scope;
-        _scope.Log("portal %d teleporting entity at %.9f, %.9f, %.9f\n", PORTAL, _pt.x, _pt.y, _pt.z);
 
         chain.tp_dirs.push_back(PortalIsPrimary<PORTAL>());
         chain.cum_primary_tps += PortalIsPrimary<PORTAL>() ? 1 : -1;
