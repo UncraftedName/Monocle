@@ -135,10 +135,8 @@ struct ChainGenerator {
                 }
             }
         }
-        if (GetPortal<PORTAL>().ShouldTeleport(ent, true)) {
-            chain.tps_queued.back() += PortalIsPrimary<PORTAL>() ? 1 : -1;
+        if (GetPortal<PORTAL>().ShouldTeleport(ent, true))
             TeleportEntity<PORTAL>();
-        }
         if (--touch_scope_depth == 0)
             CallQueued();
     }
@@ -153,6 +151,7 @@ struct ChainGenerator {
     void TeleportEntity()
     {
         if (touch_scope_depth > 0) {
+            chain.tps_queued.back() += PortalIsPrimary<PORTAL>() ? 1 : -1;
             chain._tp_queue.push_back(PORTAL);
             return;
         }
@@ -161,8 +160,6 @@ struct ChainGenerator {
             chain.max_tps_exceeded = true;
             return;
         }
-
-        Vector _pt = ent.GetCenter();
 
         chain.tp_dirs.push_back(PortalIsPrimary<PORTAL>());
         chain.cum_primary_tps += PortalIsPrimary<PORTAL>() ? 1 : -1;
