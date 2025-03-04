@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <stdarg.h>
 
+#include "chain_graphviz.h"
+
 #include "vag_logic.hpp"
 
 void NudgeEntityBehindPortalPlane(Entity& ent, const Portal& portal, bool change_ent_pos, VecUlpDiff* ulp_diff)
@@ -213,10 +215,17 @@ void GenerateTeleportChain(TpChain& chain,
         .owning_portal = tp_from_blue ? ChainGenerator::FUNC_TP_BLUE : ChainGenerator::FUNC_TP_ORANGE,
         .blue_primary = tp_from_blue,
     };
+
+    Agraph_t* g = GvCreateGraph();
+    Agnode_t* root = GvCreateRootNode(g, tp_from_blue);
+
     if (tp_from_blue)
         generator.PortalTouchEntity<ChainGenerator::FUNC_TP_BLUE>();
     else
         generator.PortalTouchEntity<ChainGenerator::FUNC_TP_ORANGE>();
     assert(chain.max_tps_exceeded || chain._tp_queue.empty());
     assert(generator.touch_scope_depth == 0);
+
+    GvWriteGraph(g);
+    GvDestroyGraph(g);
 }
