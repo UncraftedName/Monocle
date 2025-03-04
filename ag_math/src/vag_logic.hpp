@@ -119,10 +119,9 @@ struct TpChain {
 };
 
 /*
-* Calculates how many ulp nudges were needed to move the given entity until it's past the portal
-* plane (either behind or in front). If nudge_behind, will move the center until it's behind the
-* portal plane as determined by Portal::ShouldTeleport(), otherwise will move in front. Finds the
-* point which is closest to the portal plane.
+* Calculates how many ulp nudges were needed to move the given entity until it's behind the portal
+* plane as determined by Portal::ShouldTeleport(). If the point is already behind, nudges are done
+* in the direction of the portal normal so long as ShouldTeleport returns true.
 */
 void NudgeEntityBehindPortalPlane(Entity& ent, const Portal& portal, bool change_ent_pos, VecUlpDiff* ulp_diff);
 
@@ -152,4 +151,5 @@ void GenerateTeleportChain(TpChain& chain,
                            bool tp_from_blue,
                            Entity& ent,
                            EntityInfo ent_info,
-                           size_t n_max_teleports);
+                           size_t n_max_teleports,
+                           bool output_graphviz = false);

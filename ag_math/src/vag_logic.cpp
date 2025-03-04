@@ -1,10 +1,20 @@
 #include <cmath>
 #include <algorithm>
 #include <stdarg.h>
+#include <vector>
 
 #include "chain_graphviz.h"
 
 #include "vag_logic.hpp"
+
+#ifdef CHAIN_WITH_GRAPHVIZ
+// clang-format off
+struct GvcInit {
+    GvcInit() { GvInitGlobalContext(); }
+    ~GvcInit() { GvDestroyGlobalContext(); }
+} static _gvc_init{};
+// clang-format on
+#endif
 
 void NudgeEntityBehindPortalPlane(Entity& ent, const Portal& portal, bool change_ent_pos, VecUlpDiff* ulp_diff)
 {
@@ -64,6 +74,14 @@ struct ChainGenerator {
     portal_type owning_portal;
     bool blue_primary;
 
+#ifdef CHAIN_WITH_GRAPHVIZ
+    bool do_graphviz;
+    bool last_should_tp = false;
+    Agraph_t* gv_graph;
+    std::vector<Agnode_t*> gv_node_stack;
+    int cur_touch_call_idx = -1;
+#endif
+
     template <portal_type PORTAL>
     inline bool PortalIsPrimary()
     {
@@ -79,6 +97,18 @@ struct ChainGenerator {
     void CallQueued()
     {
         chain._tp_queue.push_back(-++n_queued_nulls);
+
+#ifdef CHAIN_WITH_GRAPHVIZ
+        char* cq_label = (char*)alloca(chain._tp_queue.size() + 1);
+        int i = 0;
+        for (int q : chain._tp_queue)
+            cq_label[i++] = q < 0 ? 'N' : (q == FUNC_TP_BLUE ? 'B' : 'O');
+        cq_label[i] = '\0';
+        gv_node_stack.push_back(
+            GvCreateCallQueuedNode(gv_graph, gv_node_stack.back(), last_should_tp, cq_label, cur_touch_call_idx));
+        last_should_tp = false;
+#endif
+
         for (bool dequeued_null = false; !dequeued_null && !chain.max_tps_exceeded;) {
             int val = chain._tp_queue.front();
             chain._tp_queue.pop_front();
@@ -97,6 +127,9 @@ struct ChainGenerator {
                     break;
             }
         }
+#ifdef CHAIN_WITH_GRAPHVIZ
+        gv_node_stack.pop_back();
+#endif
     }
 
     template <portal_type PORTAL>
@@ -155,6 +188,9 @@ struct ChainGenerator {
         if (touch_scope_depth > 0) {
             chain.tps_queued.back() += PortalIsPrimary<PORTAL>() ? 1 : -1;
             chain._tp_queue.push_back(PORTAL);
+#ifdef CHAIN_WITH_GRAPHVIZ
+            last_should_tp = true;
+#endif
             return;
         }
 
@@ -178,13 +214,36 @@ struct ChainGenerator {
             chain.ulp_diffs.back().SetInvalid();
         }
 
+#ifdef CHAIN_WITH_GRAPHVIZ
+        assert(!last_should_tp);
+        gv_node_stack.push_back(
+            GvCreateTeleportNode(gv_graph,
+                                 gv_node_stack.back(),
+                                 PORTAL == FUNC_TP_BLUE,
+                                 chain.cum_primary_tps,
+                                 chain.ulp_diffs.back().Valid() ? chain.ulp_diffs.back().diff : INVALID_ULP_DIFF));
+#endif
+
         ReleaseOwnershipOfEntity<PORTAL>(true);
         owning_portal = OppositePortalType<PORTAL>();
 
+#ifdef CHAIN_WITH_GRAPHVIZ
+        cur_touch_call_idx = 0;
+        EntityTouchPortal();
+        cur_touch_call_idx = 1;
+        PortalTouchEntity<OppositePortalType<PORTAL>()>();
+        cur_touch_call_idx = 2;
+        PortalTouchEntity<OppositePortalType<PORTAL>()>();
+        cur_touch_call_idx = 3;
+        EntityTouchPortal();
+
+        gv_node_stack.pop_back();
+#else
         EntityTouchPortal();
         PortalTouchEntity<OppositePortalType<PORTAL>()>();
         PortalTouchEntity<OppositePortalType<PORTAL>()>();
         EntityTouchPortal();
+#endif
     }
 };
 
@@ -193,7 +252,8 @@ void GenerateTeleportChain(TpChain& chain,
                            bool tp_from_blue,
                            Entity& ent,
                            EntityInfo ent_info,
-                           size_t n_max_teleports)
+                           size_t n_max_teleports,
+                           bool output_graphviz)
 {
     chain.Clear();
 
@@ -203,6 +263,9 @@ void GenerateTeleportChain(TpChain& chain,
     chain.tps_queued.push_back(0);
 
     Entity ent_copy = ent;
+#ifdef CHAIN_WITH_GRAPHVIZ
+    Agraph_t* g = output_graphviz ? GvCreateGraph() : nullptr;
+#endif
 
     ChainGenerator generator{
         .chain = chain,
@@ -214,10 +277,12 @@ void GenerateTeleportChain(TpChain& chain,
         .touch_scope_depth = 0,
         .owning_portal = tp_from_blue ? ChainGenerator::FUNC_TP_BLUE : ChainGenerator::FUNC_TP_ORANGE,
         .blue_primary = tp_from_blue,
+#ifdef CHAIN_WITH_GRAPHVIZ
+        .do_graphviz = output_graphviz,
+        .gv_graph = g,
+        .gv_node_stack = {GvCreateRootNode(g, tp_from_blue)},
+#endif
     };
-
-    Agraph_t* g = GvCreateGraph();
-    Agnode_t* root = GvCreateRootNode(g, tp_from_blue);
 
     if (tp_from_blue)
         generator.PortalTouchEntity<ChainGenerator::FUNC_TP_BLUE>();
@@ -226,6 +291,8 @@ void GenerateTeleportChain(TpChain& chain,
     assert(chain.max_tps_exceeded || chain._tp_queue.empty());
     assert(generator.touch_scope_depth == 0);
 
-    GvWriteGraph(g);
+#ifdef CHAIN_WITH_GRAPHVIZ
+    GvWriteGraph(g, "dot", "chain.dot");
     GvDestroyGraph(g);
+#endif
 }
