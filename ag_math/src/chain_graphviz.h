@@ -24,6 +24,7 @@ Agnode_t* GvCreateCallQueuedNode(Agraph_t* g,
                                  const char* label,
                                  int from_touch_call_idx);
 Agnode_t* GvCreateTeleportNode(Agraph_t* g, Agnode_t* cur_root, bool blue, int cum_teleports, int ulp_diffs);
+Agnode_t* GvCreateExceededTpNode(Agraph_t* g, Agnode_t* cur_root, bool blue);
 
 #ifdef __cplusplus
 }

@@ -96,6 +96,9 @@ struct ChainGenerator {
 
     void CallQueued()
     {
+        if (chain.max_tps_exceeded)
+            return;
+
         chain._tp_queue.push_back(-++n_queued_nulls);
 
 #ifdef CHAIN_WITH_GRAPHVIZ
@@ -196,6 +199,9 @@ struct ChainGenerator {
 
         if (chain.tp_dirs.size() >= max_tps) {
             chain.max_tps_exceeded = true;
+#ifdef CHAIN_WITH_GRAPHVIZ
+            GvCreateExceededTpNode(gv_graph, gv_node_stack.back(), PORTAL == FUNC_TP_BLUE);
+#endif
             return;
         }
 

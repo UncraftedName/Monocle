@@ -111,4 +111,17 @@ Agnode_t* GvCreateTeleportNode(Agraph_t* g, Agnode_t* cur_root, bool blue, int c
     return n;
 }
 
+Agnode_t* GvCreateExceededTpNode(Agraph_t* g, Agnode_t* cur_root, bool blue)
+{
+    if (!g)
+        return NULL;
+    Agnode_t* n = agnode(g, NULL, 1);
+    agsafeset(n, "label", "max number of teleports exceeded", "");
+    agsafeset(n, "color", blue ? BLUE_COLOR : ORANGE_COLOR, "");
+    agsafeset(n, "shape", "tripleoctagon", "");
+    Agedge_t* e = agedge(g, cur_root, n, NULL, 1);
+    agsafeset(e, "style", "dotted", "");
+    return n;
+}
+
 #endif
