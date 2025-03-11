@@ -261,17 +261,16 @@ TEST_CASE("Nudging point towards portal plane")
     pt[0] += pt[0] / 100000.f;
 
     Entity ent = is_player ? Entity{pt} : Entity{pt, 0.f};
-    Entity ent_copy = ent;
     VecUlpDiff ulp_diff;
-    NudgeEntityBehindPortalPlane(ent, p, true, &ulp_diff);
-    REQUIRE(p.ShouldTeleport(ent, false));
-    REQUIRE(p.ShouldTeleport(ent_copy, false) == ulp_diff.PtWasBehindPlane());
+    Entity new_ent = NudgeEntityBehindPortalPlane(ent, p, &ulp_diff);
+    REQUIRE(p.ShouldTeleport(new_ent, false));
+    REQUIRE(p.ShouldTeleport(ent, false) == ulp_diff.PtWasBehindPlane());
 
     if (ulp_diff.ax > 0) {
         // now nudge across the portal boundary (requires an ulp diff from the previous step)
-        float target = ent.origin[ulp_diff.ax] + p.plane.n[ulp_diff.ax];
-        ent.origin[ulp_diff.ax] = std::nextafterf(ent.origin[ulp_diff.ax], target);
-        REQUIRE_FALSE(p.ShouldTeleport(ent, false));
+        float target = new_ent.origin[ulp_diff.ax] + p.plane.n[ulp_diff.ax];
+        new_ent.origin[ulp_diff.ax] = std::nextafterf(new_ent.origin[ulp_diff.ax], target);
+        REQUIRE_FALSE(p.ShouldTeleport(new_ent, false));
     }
 }
 
@@ -297,14 +296,13 @@ TEST_CASE("Teleport chain results in VAG")
         DYNAMIC_SECTION("teleport limit is " << n_max_teleports)
         {
             Vector target_vag_pos = pp.Teleport(player.GetCenter(), true);
-
-            TpChain chain;
             EntityInfo ent_info{
                 .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-                .set_ent_pos_through_chain = true,
                 .origin_inbounds = false,
             };
-            GenerateTeleportChain(chain, pp, false, player, ent_info, n_max_teleports);
+            TeleportChain chain;
+            chain.Generate(pp, false, player, ent_info, n_max_teleports);
+            Entity new_player = chain.transformed_ent;
             int n_actual_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
 
             REQUIRE(chain.max_tps_exceeded == (n_actual_teleports < n_teleports_success));
@@ -319,7 +317,7 @@ TEST_CASE("Teleport chain results in VAG")
                     REQUIRE(chain.tp_dirs[2] == false);
                     REQUIRE(chain.tps_queued[3] == 0);
                     REQUIRE_THAT(chain.pts[3].DistToSqr(target_vag_pos), Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE_THAT(player.GetCenter().DistToSqr(target_vag_pos), Catch::Matchers::WithinAbs(0, .5f));
+                    REQUIRE_THAT(new_player.GetCenter().DistToSqr(target_vag_pos), Catch::Matchers::WithinAbs(0, .5f));
                     REQUIRE_FALSE(chain.ulp_diffs[3].Valid());
                     [[fallthrough]];
                 case 2:
@@ -372,13 +370,13 @@ TEST_CASE("Teleport chain results in 5 teleports")
         {
             Vector target_vag_pos = pp.Teleport(player.GetCenter(), true);
 
-            TpChain chain;
             EntityInfo ent_info{
                 .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-                .set_ent_pos_through_chain = true,
                 .origin_inbounds = false,
             };
-            GenerateTeleportChain(chain, pp, false, player, ent_info, n_max_teleports);
+            TeleportChain chain;
+            chain.Generate(pp, false, player, ent_info, n_max_teleports);
+            Entity new_player = chain.transformed_ent;
             int n_actual_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
 
             REQUIRE(chain.max_tps_exceeded == (n_actual_teleports < n_teleports_success));
@@ -393,7 +391,7 @@ TEST_CASE("Teleport chain results in 5 teleports")
                     REQUIRE(chain.tp_dirs[4] == true);
                     REQUIRE(chain.tps_queued[5] == 0);
                     REQUIRE_THAT(chain.pts[5].DistToSqr(pp.blue.pos), Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE_THAT(player.GetCenter().DistToSqr(pp.blue.pos), Catch::Matchers::WithinAbs(0, .5f));
+                    REQUIRE_THAT(new_player.GetCenter().DistToSqr(pp.blue.pos), Catch::Matchers::WithinAbs(0, .5f));
                     REQUIRE(chain.ulp_diffs[5].ax == 0);
                     REQUIRE_FALSE(chain.ulp_diffs[5].PtWasBehindPlane());
                     [[fallthrough]];
@@ -450,13 +448,12 @@ TEST_CASE("Finite teleport chain results in free edicts")
     };
     pp.CalcTpMatrices(PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED);
     Entity player{Vector{-127.96876f, -191.24300f, 182.03125f}};
-    TpChain chain;
     EntityInfo ent_info{
         .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-        .set_ent_pos_through_chain = false,
         .origin_inbounds = false,
     };
-    GenerateTeleportChain(chain, pp, false, player, ent_info, 200);
+    TeleportChain chain;
+    chain.Generate(pp, false, player, ent_info, 200);
     REQUIRE_FALSE(chain.max_tps_exceeded);
     REQUIRE(chain.tp_dirs.size() == 82);
     REQUIRE(chain.cum_primary_tps == 0);
@@ -560,7 +557,7 @@ TEST_CASE("SPT with IPC")
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
 
     small_prng rng;
-    TpChain chain;
+    TeleportChain chain;
 
     int iteration = 0;
     while (iteration < 1000) {
@@ -583,13 +580,12 @@ TEST_CASE("SPT with IPC")
         PortalPair pp{blue, orange};
 
         pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
-        Entity player_ent{blue.pos};
+        Entity player{blue.pos};
         EntityInfo ent_info{
             .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .set_ent_pos_through_chain = false,
             .origin_inbounds = false,
         };
-        GenerateTeleportChain(chain, pp, true, player_ent, ent_info, 3);
+        chain.Generate(pp, true, player, ent_info, 3);
         // only handle basic teleports and simple VAGs for now
         if (chain.max_tps_exceeded || (chain.cum_primary_tps != 1 && chain.cum_primary_tps != -1))
             continue;
@@ -600,11 +596,14 @@ TEST_CASE("SPT with IPC")
         * on the boundary. Using a single string with two setpos commands doesn't work (not sure
         * how that works under the hood), but sending two separate setpos commands works.
         * 
-        * TODO: figure out why this happens
+        * This is probably because SPT will process the two separate message on different frames,
+        * and that will allow time for the first setpos to go through. The setpos on the boundary
+        * probably fails to work on maps where the map origin is inbounds due to a portal
+        * ownership bug.
         */
 
         // clang-format off
-        Entity tmp_player_ent{blue.pos + blue.f};
+        Entity tmp_player{blue.pos + blue.f};
         auto& bp = pp.blue.pos; auto& op = pp.orange.pos;
         auto& ba = pp.blue.ang; auto& oa = pp.orange.ang;
         conn.SendCmd(
@@ -613,11 +612,12 @@ TEST_CASE("SPT with IPC")
             "setpos %.9g %.9g %.9g",
             op.x, op.y, op.z, oa.x, oa.y, oa.z,
             bp.x, bp.y, bp.z, ba.x, ba.y, ba.z,
-            tmp_player_ent.origin.x, tmp_player_ent.origin.y, tmp_player_ent.origin.z
+            tmp_player.origin.x, tmp_player.origin.y, tmp_player.origin.z
         );
         // clang-format on
         conn.RecvAck();
-        conn.SendCmd("setpos %.9g %.9g %.9g", player_ent.origin.x, player_ent.origin.y, player_ent.origin.z);
+        Vector boundary_setpos = chain.pre_teleported_ent.origin;
+        conn.SendCmd("setpos %.9g %.9g %.9g", boundary_setpos.x, boundary_setpos.y, boundary_setpos.z);
         conn.RecvAck();
 
         // timescale 1: sleep for 350ms, timescale 20: sleep for 10ms
@@ -639,8 +639,8 @@ TEST_CASE("SPT with IPC")
 
         INFO("iteration " << iteration);
         INFO("expected " << (chain.cum_primary_tps == CUM_TP_VAG ? "VAG" : "normal teleport"));
-        Entity expected_ent{chain.pts.back()};
-        REQUIRE(actual_player_pos.DistToSqr(expected_ent.origin) < 100 * 100);
+        Entity expected_player_pos = chain.transformed_ent;
+        REQUIRE(actual_player_pos.DistToSqr(expected_player_pos.origin) < 100 * 100);
         printf("iteration %d: %s", iteration, chain.cum_primary_tps == CUM_TP_VAG ? "VAG\n" : "Normal teleport\n");
         iteration++;
     }

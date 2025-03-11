@@ -255,7 +255,6 @@ struct plane_bits {
     uint8_t sign : 3;
 };
 
-// TODO - these fields might be generated a different way if the portal loaded in?
 struct Portal {
     Vector pos; // m_vecOrigin/m_vecAbsOrigin
     QAngle ang; // m_angAngles/m_angAbsAngles

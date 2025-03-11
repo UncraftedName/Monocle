@@ -106,7 +106,7 @@ struct SearchResult {
     int n_iterations;
     PlacementOrder po;
     Entity ent;
-    TpChain chain;
+    TeleportChain chain;
     PortalPair pp;
 
     void print() const
@@ -146,9 +146,7 @@ struct SearchSpace {
                                       (entry_pos_search & SEPF_UP) ? PORTAL_HALF_HEIGHT : 0);
             Vector ent_pos = p.pos + (p.r * rm + p.u * um) * .5f;
             st.ent = tp_player ? Entity{ent_pos} : Entity{ent_pos, 1.f};
-
-            assert(!ent_info.set_ent_pos_through_chain); // otherwise print() on the results will not be correct
-            GenerateTeleportChain(st.chain, st.pp, tp_from_blue, st.ent, ent_info, 3);
+            st.chain.Generate(st.pp, tp_from_blue, st.ent, ent_info, 3);
 
             if (i == 0) {
                 printf("sample portals:\n");

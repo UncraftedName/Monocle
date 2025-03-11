@@ -85,7 +85,7 @@ static QAngle RandomAng(small_prng& rng, PITCH_YAW_TYPE type, bool has_roll)
 static void PlotUlpDistribution()
 {
     small_prng rng{2};
-    TpChain chain;
+    TeleportChain chain;
     std::vector<int> ulp_diffs;
     for (int i = 0; i < 100000; i++) {
         PortalPair pp{
@@ -98,10 +98,9 @@ static void PlotUlpDistribution()
         Entity ent{pp.blue.pos};
         EntityInfo ent_info{
             .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .set_ent_pos_through_chain = true,
             .origin_inbounds = false,
         };
-        GenerateTeleportChain(chain, pp, true, ent, ent_info, 3);
+        chain.Generate(pp, true, ent, ent_info, 3);
         if (chain.max_tps_exceeded)
             continue;
         assert(chain.ulp_diffs[1].Valid());
@@ -127,7 +126,7 @@ static void GenerateResultsDistributionsToFile()
 
     small_prng rng{};
     const int n_runs_per_combination = 10000;
-    TpChain chain;
+    TeleportChain chain;
 
     std::ofstream of{"results.txt"};
     of << "{\n";
@@ -171,10 +170,9 @@ static void GenerateResultsDistributionsToFile()
             Entity ent{ent_pos};
             EntityInfo ent_info{
                 .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-                .set_ent_pos_through_chain = true,
                 .origin_inbounds = false,
             };
-            GenerateTeleportChain(chain, pp, true, ent, ent_info, 3);
+            chain.Generate(pp, true, ent, ent_info, 3);
             if (chain.max_tps_exceeded)
                 results[RESULT_UNKNOWN]++;
             else if (chain.cum_primary_tps == 1)
@@ -224,7 +222,7 @@ static void CreateOverlayPortalImage(const PortalPair& pair, const char* file_na
 
         pool.push([x_res, u_off, y, from_blue, &p, &pair, &pixels, rand_nudge](int) -> void {
             small_prng rng{y};
-            TpChain chain;
+            TeleportChain chain;
             for (size_t x = 0; x < x_res; x++) {
                 float rx = rand_nudge ? rng.next_float(-.1f, .1f) : 0.f;
                 float ox = PORTAL_HALF_WIDTH * (-1 + 1.f / x_res);
@@ -236,11 +234,10 @@ static void CreateOverlayPortalImage(const PortalPair& pair, const char* file_na
 
                 EntityInfo ent_info{
                     .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-                    .set_ent_pos_through_chain = true,
                     .origin_inbounds = false,
                 };
                 size_t n_max_teleports = 10;
-                GenerateTeleportChain(chain, pair, from_blue, ent, ent_info, n_max_teleports);
+                chain.Generate(pair, from_blue, ent, ent_info, n_max_teleports);
                 pixel& pix = pixels[x_res * y + x];
                 pix.a = 255;
                 if (chain.max_tps_exceeded)
@@ -268,7 +265,7 @@ static void FindVagIn04()
     TIME_FUNC();
 
     small_prng rng{0};
-    TpChain chain;
+    TeleportChain chain;
     float xmin = -75.70868f;
     float xmax = 145.85846f;
     float ymin = 311.f;
@@ -292,10 +289,9 @@ static void FindVagIn04()
         Entity ent{pp.blue.pos + pp.blue.r * r + pp.blue.u * u};
         EntityInfo ent_info{
             .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .set_ent_pos_through_chain = false,
             .origin_inbounds = true,
         };
-        GenerateTeleportChain(chain, pp, true, ent, ent_info, 3);
+        chain.Generate(pp, true, ent, ent_info, 3);
         if (chain.max_tps_exceeded)
             continue;
         if (chain.cum_primary_tps != -1)
@@ -339,7 +335,6 @@ static void FindVag18StartCeilCubeRoom()
         },
         .ent_info{
             .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .set_ent_pos_through_chain = false,
             .origin_inbounds = false,
         },
         .tp_from_blue = true,
@@ -360,7 +355,7 @@ static void FindComplexChain()
 {
     small_prng rng{0};
     AABB pos_space{Vector{30, 30, 750}, Vector{400, 400, 1000}};
-    TpChain chain;
+    TeleportChain chain;
     for (int i = 0; i < 1000000; i++) {
         PortalPair pp{
             pos_space.RandomPtInBox(rng),
@@ -374,10 +369,9 @@ static void FindComplexChain()
         Entity ent{pp.blue.pos};
         EntityInfo ent_info{
             .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .set_ent_pos_through_chain = false,
             .origin_inbounds = true,
         };
-        GenerateTeleportChain(chain, pp, true, ent, ent_info, 10);
+        chain.Generate(pp, true, ent, ent_info, 10);
         if (chain.max_tps_exceeded)
             continue;
         if (chain.cum_primary_tps >= -1 && chain.cum_primary_tps <= 1)
@@ -403,20 +397,19 @@ static void DebugInfinite09Chain()
     };
     pp.CalcTpMatrices(PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED);
     Entity player{Vector{-127.96876f, -191.24300f, 182.03125f}};
-    TpChain chain;
+    TeleportChain chain;
     EntityInfo ent_info{
         .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-        .set_ent_pos_through_chain = true,
         .origin_inbounds = false,
     };
-    GenerateTeleportChain(chain, pp, false, player, ent_info, 5000);
+    chain.Generate(pp, false, player, ent_info, 5000);
 }
 
 static void CreateSpinAnimation()
 {
     small_prng rng{20};
     AABB pos_space{Vector{30, 30, 750}, Vector{400, 400, 1000}};
-    TpChain chain;
+    TeleportChain chain;
     for (int i = 0; i < 100000; i++) {
         PortalPair pp{
             pos_space.RandomPtInBox(rng),
@@ -430,14 +423,13 @@ static void CreateSpinAnimation()
         Entity ent{pp.blue.pos + pp.blue.r};
         EntityInfo ent_info{
             .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .set_ent_pos_through_chain = true,
             .origin_inbounds = false,
         };
-        GenerateTeleportChain(chain, pp, true, ent, ent_info, 10);
+        chain.Generate(pp, true, ent, ent_info, 10);
         if (chain.max_tps_exceeded || chain.cum_primary_tps != CUM_TP_NORMAL_TELEPORT)
             continue;
         ent = Entity{pp.blue.pos - pp.blue.r};
-        GenerateTeleportChain(chain, pp, true, ent, ent_info, 10);
+        chain.Generate(pp, true, ent, ent_info, 10);
         if (chain.max_tps_exceeded || chain.cum_primary_tps != CUM_TP_VAG)
             continue;
         for (int i = -180; i < 180; i++) {
@@ -455,7 +447,7 @@ static void FindInfiniteChain()
 {
     small_prng rng{0};
     AABB pos_space{Vector{30, 30, 750}, Vector{400, 400, 1000}};
-    TpChain chain;
+    TeleportChain chain;
     for (int i = 0; i < 100000; i++) {
         PortalPair pp{
             pos_space.RandomPtInBox(rng),
@@ -469,10 +461,9 @@ static void FindInfiniteChain()
         Entity player{pp.blue.pos};
         EntityInfo ent_info{
             .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .set_ent_pos_through_chain = false,
             .origin_inbounds = false,
         };
-        GenerateTeleportChain(chain, pp, true, player, ent_info, 400000);
+        chain.Generate(pp, true, player, ent_info, 400000);
         if (!chain.max_tps_exceeded)
             continue;
         pp.PrintNewlocationCmd();
@@ -485,7 +476,7 @@ static void FindFiniteChainThatGivesNFE()
 {
     small_prng rng{0};
     AABB pos_space{Vector{30, 30, 750}, Vector{400, 400, 1000}};
-    TpChain chain;
+    TeleportChain chain;
     for (int i = 0; i < 1000000; i++) {
         PortalPair pp{
             pos_space.RandomPtInBox(rng),
@@ -499,16 +490,15 @@ static void FindFiniteChainThatGivesNFE()
         Entity player{pp.blue.pos};
         EntityInfo ent_info{
             .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .set_ent_pos_through_chain = true,
             .origin_inbounds = false,
         };
-        GenerateTeleportChain(chain, pp, true, player, ent_info, 34);
+        chain.Generate(pp, true, player, ent_info, 34);
         if (chain.max_tps_exceeded)
             continue;
         if (chain.cum_primary_tps != 0)
             continue;
         VecUlpDiff diff;
-        NudgeEntityBehindPortalPlane(player, pp.blue, false, &diff);
+        NudgeEntityBehindPortalPlane(chain.transformed_ent, pp.blue, &diff);
         if (!diff.PtWasBehindPlane())
             continue;
         printf("found chain of length %u on iteration %d\n", chain.tp_dirs.size(), i);
@@ -549,7 +539,6 @@ static void FindVagIn09EleTop()
         },
         .ent_info{
             .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .set_ent_pos_through_chain = false,
             .origin_inbounds = false,
         },
         .tp_from_blue = false,
@@ -592,7 +581,6 @@ static void FindVagIn09EleBottom()
         },
         .ent_info{
             .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .set_ent_pos_through_chain = false,
             .origin_inbounds = false,
         },
         .tp_from_blue = false,
@@ -626,7 +614,6 @@ static void FindVagIn11()
         },
         .ent_info{
             .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .set_ent_pos_through_chain = false,
             .origin_inbounds = true,
         },
         .tp_from_blue = false,
@@ -663,7 +650,6 @@ static void FindKnownVagIn11()
         },
         .ent_info{
             .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .set_ent_pos_through_chain = false,
             .origin_inbounds = true,
         },
         .tp_from_blue = false,

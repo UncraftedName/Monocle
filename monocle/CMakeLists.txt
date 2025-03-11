@@ -7,6 +7,7 @@ include_directories(
 	src
 	"${CATCH_DIR}/src"
 	"${AG_MATH_DIR}/src"
+	"${GRAPHVIZ_INCLUDE}"
 )
 
 SET(MAIN_FILE "${PROJECT_SOURCE_DIR}/src/main.cpp")
