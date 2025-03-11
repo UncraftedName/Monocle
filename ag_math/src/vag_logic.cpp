@@ -102,13 +102,24 @@ struct ChainGenerator {
         chain._tp_queue.push_back(-++n_queued_nulls);
 
 #ifdef CHAIN_WITH_GRAPHVIZ
-        char* cq_label = (char*)alloca(chain._tp_queue.size() + 1);
+        char* cq_label = (char*)_malloca(chain._tp_queue.size() + 1);
         int i = 0;
-        for (int q : chain._tp_queue)
-            cq_label[i++] = q < 0 ? 'N' : (q == FUNC_TP_BLUE ? 'B' : 'O');
+        for (int q : chain._tp_queue) {
+            char symbol;
+            if (q == FUNC_TP_BLUE)
+                symbol = 'B';
+            else if (q == FUNC_TP_ORANGE)
+                symbol = 'O';
+            else if (q == FUNC_RECHECK_COLLISION)
+                symbol = 'R';
+            else
+                symbol = 'N';
+            cq_label[i++] = symbol;
+        }
         cq_label[i] = '\0';
         gv_node_stack.push_back(
             GvCreateCallQueuedNode(gv_graph, gv_node_stack.back(), last_should_tp, cq_label, cur_touch_call_idx));
+        _freea(cq_label);
         last_should_tp = false;
 #endif
 
