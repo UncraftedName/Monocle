@@ -32,7 +32,12 @@ void tga_write(const char* filename,
     // clang-format on
     file.write((char*)header, sizeof header);
 
+    std::unique_ptr<uint8_t[]> data = std::make_unique_for_overwrite<uint8_t[]>(width * height * fileChannels);
+    size_t x = 0;
+
     for (uint32_t i = 0; i < width * height; i++)
         for (uint32_t b = 0; b < fileChannels; b++)
-            file.put(dataBGRA[(i * dataChannels) + (b % dataChannels)]);
+            data.get()[x++] = dataBGRA[(i * dataChannels) + (b % dataChannels)];
+
+    file.write((char*)data.get(), width * height * fileChannels);
 }
