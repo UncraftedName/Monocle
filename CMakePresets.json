@@ -1,0 +1,31 @@
+{
+	"version": 6,
+	"cmakeMinimumRequired": {
+		"major": 3,
+		"minor": 10
+	},
+	"configurePresets": [
+		{
+			"name": "base",
+			"generator": "Visual Studio 17 2022",
+			"architecture": "Win32",
+			"toolset": "v143",
+			"binaryDir": "${sourceDir}/out/build/${presetName}",
+			"cacheVariables": {
+				"CMAKE_CONFIGURATION_TYPES": "Debug;Release"
+			}
+		}
+	],
+	"buildPresets": [
+		{
+			"name": "Debug",
+			"configurePreset": "base",
+			"configuration": "Debug"
+		},
+		{
+			"name": "Release",
+			"configurePreset": "base",
+			"configuration": "Release"
+		}
+	]
+}

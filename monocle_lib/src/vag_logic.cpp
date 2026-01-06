@@ -2,19 +2,9 @@
 #include <algorithm>
 #include <stdarg.h>
 #include <vector>
-
-#include "chain_graphviz.h"
+#include <fstream>
 
 #include "vag_logic.hpp"
-
-#ifdef CHAIN_WITH_GRAPHVIZ
-// clang-format off
-struct GvcInit {
-    GvcInit() { GvInitGlobalContext(); }
-    ~GvcInit() { GvDestroyGlobalContext(); }
-} static _gvc_init{};
-// clang-format on
-#endif
 
 Entity NudgeEntityBehindPortalPlane(const Entity& ent, const Portal& portal, VecUlpDiff* ulp_diff)
 {
@@ -120,11 +110,14 @@ void TeleportChain::Generate(const PortalPair& pair,
     max_tps = n_max_teleports;
     blue_primary = tp_from_blue;
     owning_portal = tp_from_blue ? FUNC_TP_BLUE : FUNC_TP_ORANGE;
-#ifdef CHAIN_WITH_GRAPHVIZ
-    do_graphviz = output_graphviz;
-    gv_graph = output_graphviz ? GvCreateGraph() : nullptr;
-    gv_node_stack = {GvCreateRootNode(gv_graph, tp_from_blue)};
-#endif
+
+    // TODO change to param
+    DotGen dotGen;
+    if (output_graphviz)
+        dg = &dotGen;
+
+    if (dg)
+        dg->PushRootNode(tp_from_blue);
 
     // assume we're teleporting from the portal boundary
     ulp_diffs.emplace_back();
@@ -140,10 +133,11 @@ void TeleportChain::Generate(const PortalPair& pair,
     assert(max_tps_exceeded || tp_queue.empty());
     assert(touch_scope_depth == 0);
 
-#ifdef CHAIN_WITH_GRAPHVIZ
-    GvWriteGraph(gv_graph, "dot", "chain.dot");
-    GvDestroyGraph(gv_graph);
-#endif
+    if (dg) {
+        dg->Finish();
+        std::ofstream("chain.dot") << dg->buf;
+        dg = nullptr;
+    }
 }
 
 void TeleportChain::CallQueued()
@@ -153,29 +147,9 @@ void TeleportChain::CallQueued()
 
     tp_queue.push_back(-++n_queued_nulls);
 
-#ifdef CHAIN_WITH_GRAPHVIZ
-    if (do_graphviz) {
-        char* cq_label = (char*)_malloca(tp_queue.size() + 1);
-        int i = 0;
-        for (int q : tp_queue) {
-            char symbol;
-            if (q == FUNC_TP_BLUE)
-                symbol = 'B';
-            else if (q == FUNC_TP_ORANGE)
-                symbol = 'O';
-            else if (q == FUNC_RECHECK_COLLISION)
-                symbol = 'R';
-            else
-                symbol = 'N';
-            cq_label[i++] = symbol;
-        }
-        cq_label[i] = '\0';
-        gv_node_stack.push_back(
-            GvCreateCallQueuedNode(gv_graph, gv_node_stack.back(), last_should_tp, cq_label, cur_touch_call_idx));
-        _freea(cq_label);
-        last_should_tp = false;
-    }
-#endif
+    if (dg)
+        dg->PushCallQueuedNode(last_should_tp, tp_queue, cur_touch_call_idx);
+    last_should_tp = false;
 
     for (bool dequeued_null = false; !dequeued_null && !max_tps_exceeded;) {
         int val = tp_queue.front();
@@ -195,10 +169,8 @@ void TeleportChain::CallQueued()
                 break;
         }
     }
-#ifdef CHAIN_WITH_GRAPHVIZ
-    if (do_graphviz)
-        gv_node_stack.pop_back();
-#endif
+    if (dg)
+        dg->PopNode();
 }
 
 template <TeleportChain::portal_type PORTAL>
@@ -258,17 +230,14 @@ void TeleportChain::TeleportEntity()
     if (touch_scope_depth > 0) {
         tps_queued.back() += PortalIsPrimary<PORTAL>() ? 1 : -1;
         tp_queue.push_back(PORTAL);
-#ifdef CHAIN_WITH_GRAPHVIZ
         last_should_tp = true;
-#endif
         return;
     }
 
     if (tp_dirs.size() >= max_tps) {
         max_tps_exceeded = true;
-#ifdef CHAIN_WITH_GRAPHVIZ
-        GvCreateExceededTpNode(gv_graph, gv_node_stack.back(), PORTAL == FUNC_TP_BLUE);
-#endif
+        if (dg)
+            dg->PushExceededTpNode(PORTAL == FUNC_TP_BLUE);
         return;
     }
 
@@ -287,22 +256,13 @@ void TeleportChain::TeleportEntity()
         ulp_diffs.back().SetInvalid();
     }
 
-#ifdef CHAIN_WITH_GRAPHVIZ
-    if (do_graphviz) {
-        assert(!last_should_tp);
-        gv_node_stack.push_back(
-            GvCreateTeleportNode(gv_graph,
-                                 gv_node_stack.back(),
-                                 PORTAL == FUNC_TP_BLUE,
-                                 cum_primary_tps,
-                                 ulp_diffs.back().Valid() ? ulp_diffs.back().diff : INVALID_ULP_DIFF));
-    }
-#endif
+    assert(!last_should_tp);
+    if (dg)
+        dg->PushTeleportNode(PORTAL == FUNC_TP_BLUE, cum_primary_tps, ulp_diffs.back());
 
     ReleaseOwnershipOfEntity<PORTAL>(true);
     owning_portal = OppositePortalType<PORTAL>();
 
-#ifdef CHAIN_WITH_GRAPHVIZ
     cur_touch_call_idx = 0;
     EntityTouchPortal();
     cur_touch_call_idx = 1;
@@ -312,12 +272,6 @@ void TeleportChain::TeleportEntity()
     cur_touch_call_idx = 3;
     EntityTouchPortal();
 
-    if (do_graphviz)
-        gv_node_stack.pop_back();
-#else
-    EntityTouchPortal();
-    PortalTouchEntity<OppositePortalType<PORTAL>()>();
-    PortalTouchEntity<OppositePortalType<PORTAL>()>();
-    EntityTouchPortal();
-#endif
+    if (dg)
+        dg->PopNode();
 }

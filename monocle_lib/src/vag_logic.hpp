@@ -3,12 +3,11 @@
 #include <stdint.h>
 #include <vector>
 #include <deque>
+#include <string>
 
 #include "source_math.hpp"
 
-#ifdef CHAIN_WITH_GRAPHVIZ
-#include "chain_graphviz.h"
-#endif
+class DotGen;
 
 /*
 * Represents a difference between two Vectors in ULPs. All VAG related code only nudges points
@@ -118,35 +117,32 @@ public:
                   size_t n_max_teleports,
                   bool output_graphviz = false);
 
-private:
+    using queue_entry = short;
+    using queue_type = std::deque<queue_entry>;
+
+    using portal_type = queue_entry;
+
+    static constexpr portal_type FUNC_RECHECK_COLLISION = 0;
+    static constexpr portal_type FUNC_TP_BLUE = 1;
+    static constexpr portal_type FUNC_TP_ORANGE = 2;
+    static constexpr portal_type PORTAL_NONE = 0;
+
     // state for chain generation
 
-    using queue_type = short;
-
-    std::deque<queue_type> tp_queue;
-    queue_type n_queued_nulls;
+    queue_type tp_queue;
+    queue_entry n_queued_nulls;
     const PortalPair* pp;
     EntityInfo ent_info;
     size_t max_tps;
     int touch_scope_depth; // CPortalTouchScope::m_nDepth, not fully implemented
     bool blue_primary;
 
-#ifdef CHAIN_WITH_GRAPHVIZ
-    bool do_graphviz;
+    // state for graphviz dot generation
+    DotGen* dg = nullptr;
     bool last_should_tp = false;
-    Agraph_t* gv_graph;
-    std::vector<Agnode_t*> gv_node_stack;
     int cur_touch_call_idx = -1;
-#endif
-
-    using portal_type = queue_type;
 
     portal_type owning_portal;
-
-    static constexpr portal_type FUNC_RECHECK_COLLISION = 0;
-    static constexpr portal_type FUNC_TP_BLUE = 1;
-    static constexpr portal_type FUNC_TP_ORANGE = 2;
-    static constexpr portal_type PORTAL_NONE = 0;
 
     template <portal_type PORTAL>
     static constexpr portal_type OppositePortalType()
@@ -184,4 +180,43 @@ private:
 
     template <portal_type>
     void TeleportEntity();
+};
+
+/*
+* Generates a DOT format graph representing a teleport chain. Originally this was done via the
+* Graphviz C API, but that led to DLL linking hell. So instead we just format the dot format
+* manually.
+*/
+class DotGen {
+    std::vector<int> nodeStack;
+    int nodeCounter = 0;
+
+public:
+    // after Finish(), contains the DOT graph text
+    std::string buf;
+
+    struct {
+        const char* indent = "    ";
+        const char* blueCol = "cornflowerblue";
+        const char* orangeCol = "orange";
+        const char* defaultEdgeAttributes = "style = dotted";
+        const char* teleportEdgeAttributes = "color = red";
+    } style;
+
+    // clears the state and starts a new graph, with the given color for the initial teleport portal
+    void PushRootNode(bool blue);
+    void PushCallQueuedNode(bool queued_teleport, const TeleportChain::queue_type& queue, int from_touch_call_idx);
+    void PushTeleportNode(bool blue, int cum_teleports, VecUlpDiff ulpDiff);
+    void PushExceededTpNode(bool blue);
+
+    // for every push, there is a pop
+    void PopNode()
+    {
+        nodeStack.pop_back();
+    }
+
+    void Finish()
+    {
+        buf += "}\n";
+    };
 };
