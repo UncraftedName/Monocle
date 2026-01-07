@@ -1,6 +1,5 @@
 #include "vag_logic.hpp"
 
-#include <stdarg.h>
 #include <format>
 
 template <class... Args>

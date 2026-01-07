@@ -45,13 +45,13 @@ Portal::Portal(const Vector& v, const QAngle& q) : pos{v}, ang{q}
     hole_planes[1].n = -f;
     hole_planes[1].d = -plane.d + PORTAL_HOLE_DEPTH;
     hole_planes[2].n = u;
-    hole_planes[2].d = u.Dot(pos + u * (PORTAL_HALF_HEIGHT * .98f));
+    hole_planes[2].d = (float)u.Dot(pos + u * (PORTAL_HALF_HEIGHT * .98f));
     hole_planes[3].n = -u;
-    hole_planes[3].d = -u.Dot(pos - u * (PORTAL_HALF_HEIGHT * .98f));
+    hole_planes[3].d = (float)-u.Dot(pos - u * (PORTAL_HALF_HEIGHT * .98f));
     hole_planes[4].n = -r;
-    hole_planes[4].d = -r.Dot(pos - r * (PORTAL_HALF_WIDTH * .98f));
+    hole_planes[4].d = (float)-r.Dot(pos - r * (PORTAL_HALF_WIDTH * .98f));
     hole_planes[5].n = r;
-    hole_planes[5].d = r.Dot(pos + r * (PORTAL_HALF_WIDTH * .98f));
+    hole_planes[5].d = (float)r.Dot(pos + r * (PORTAL_HALF_WIDTH * .98f));
     // SignbitsForPlane & setting the type; game uses .999f for the type, but I need tighter tolerances
     for (int i = 0; i < 6; i++) {
         hole_planes_bits[i].sign = 0;
@@ -209,6 +209,7 @@ int BoxOnPlaneSide(const Vector& mins, const Vector& maxs, const VPlane& p, plan
             break;
         default:
             assert(0);
+            d1 = d2 = 0.f;
     }
     int r = 0;
     if (d1 >= p.d)
@@ -222,7 +223,7 @@ int BoxOnPlaneSide(const Vector& mins, const Vector& maxs, const VPlane& p, plan
 // VPlane::GetPointSide
 int BallOnPlaneSide(const Vector& c, float r, const VPlane& p)
 {
-    float d = c.Dot(p.n) - p.d;
+    float d = (float)(c.Dot(p.n) - p.d);
     if (d >= r)
         return PSR_FRONT;
     if (d <= -r)

@@ -180,7 +180,7 @@ void TeleportChain::ReleaseOwnershipOfEntity(bool moving_to_linked)
         return;
     owning_portal = PORTAL_NONE;
     if (touch_scope_depth > 0)
-        for (size_t i = 0; i < ent_info.n_ent_children + !moving_to_linked; i++)
+        for (int i = 0; i < ent_info.n_ent_children + !moving_to_linked; i++)
             tp_queue.push_back(FUNC_RECHECK_COLLISION);
 }
 

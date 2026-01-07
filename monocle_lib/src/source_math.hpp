@@ -20,7 +20,7 @@ inline void SyncFloatingPointControlWord()
         _controlfp_s(nullptr,
                      (_EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW | _EM_ZERODIVIDE | _EM_INVALID | _EM_DENORMAL) |
                          (_RC_NEAR | _PC_53 | _IC_PROJECTIVE),
-                     ~0);
+                     ~0u);
     assert(!err);
 }
 
@@ -126,7 +126,7 @@ struct Vector {
     float DistToSqr(const Vector& v) const
     {
         Vector d = *this - v;
-        return d.Dot(d);
+        return (float)d.Dot(d);
     }
 
     constexpr Vector operator*(float f) const
