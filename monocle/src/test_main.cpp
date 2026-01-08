@@ -460,6 +460,17 @@ TEST_CASE("Finite teleport chain results in free edicts")
     REQUIRE(chain.ulp_diffs.back().PtWasBehindPlane());
 }
 
+/*
+* To use:
+* - open the game and load a sufficiently recent version of SPT (anything after 03-2025 work)
+* - run `spt_ipc 1`
+* - create an orange and blue portal and set their name using `picker` & `ent_setname` to 'blue'/'orange'
+* - noclip and crouch (with toggle duck)
+* - run the tests
+* 
+* If this fails on the first iteration, try running again. Sometimes the relevant commands don't
+* get sent to SPT quickly enough before host_timescale is set.
+*/
 TEST_CASE("SPT with IPC")
 {
     const USHORT spt_port = 27182;
@@ -600,6 +611,9 @@ TEST_CASE("SPT with IPC")
         * and that will allow time for the first setpos to go through. The setpos on the boundary
         * probably fails to work on maps where the map origin is inbounds due to a portal
         * ownership bug.
+        * 
+        * Update: the reason some portals don't trigger StartTouch is probably because of the
+        * origin of the map being inbounds in some cases.
         */
 
         // clang-format off
@@ -623,7 +637,7 @@ TEST_CASE("SPT with IPC")
         // timescale 1: sleep for 350ms, timescale 20: sleep for 10ms
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-        conn.SendCmd("spt_ipc_properties 0 m_vecOrigin");
+        conn.SendCmd("spt_ipc_properties 1 m_vecOrigin");
         conn.RecvAck();
         conn.NextRecvMsg();
         Vector actual_player_pos{};
