@@ -95,7 +95,7 @@ static void PlotUlpDistribution()
             RandomAng(rng, PYT_ANY, true),
         };
         pp.CalcTpMatrices(PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION);
-        Entity ent{pp.blue.pos};
+        Entity ent = Entity::CreatePlayerFromCenter(pp.blue.pos, true);
         EntityInfo ent_info{
             .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
             .origin_inbounds = false,
@@ -167,7 +167,7 @@ static void GenerateResultsDistributionsToFile()
             Vector ent_pos = pp.blue.pos +
                              pp.blue.r * rng.next_float(-PORTAL_HALF_WIDTH * .5f, PORTAL_HALF_WIDTH * .5f) +
                              pp.blue.u * rng.next_float(-PORTAL_HALF_HEIGHT * .5f, PORTAL_HALF_HEIGHT * .5f);
-            Entity ent{ent_pos};
+            Entity ent = Entity::CreatePlayerFromCenter(ent_pos, true);
             EntityInfo ent_info{
                 .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
                 .origin_inbounds = false,
@@ -201,7 +201,11 @@ static void GenerateResultsDistributionsToFile()
     of << "\n]\n}\n";
 }
 
-static void CreateOverlayPortalImage(const PortalPair& pair, const char* file_name, size_t y_res, bool from_blue, bool rand_nudge=false)
+static void CreateOverlayPortalImage(const PortalPair& pair,
+                                     const char* file_name,
+                                     size_t y_res,
+                                     bool from_blue,
+                                     bool rand_nudge = false)
 {
     TIME_FUNC();
 
@@ -230,7 +234,7 @@ static void CreateOverlayPortalImage(const PortalPair& pair, const char* file_na
                 float mx = ox * (1 - 2 * tx);
 
                 Vector r_off = p.r * mx;
-                Entity ent{p.pos + r_off + u_off};
+                Entity ent = Entity::CreatePlayerFromCenter(p.pos + r_off + u_off, true);
 
                 EntityInfo ent_info{
                     .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
@@ -286,7 +290,7 @@ static void FindVagIn04()
         pp.CalcTpMatrices(PlacementOrder::BLUE_WAS_CLOSED_ORANGE_OPENED);
         float r = rng.next_float(-PORTAL_HALF_WIDTH * 0.5f, PORTAL_HALF_WIDTH * 0.5f);
         float u = rng.next_float(-PORTAL_HALF_HEIGHT * 0.5f, PORTAL_HALF_HEIGHT * 0.5f);
-        Entity ent{pp.blue.pos + pp.blue.r * r + pp.blue.u * u};
+        Entity ent = Entity::CreatePlayerFromCenter(pp.blue.pos + pp.blue.r * r + pp.blue.u * u, true);
         EntityInfo ent_info{
             .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
             .origin_inbounds = true,
@@ -302,7 +306,7 @@ static void FindVagIn04()
         if (t.x > target_maxs.x || t.y > target_maxs.y || t.z > target_maxs.z)
             continue;
         pp.PrintNewlocationCmd();
-        ent.PrintSetposCmd();
+        printf("%s\n", ent.GetSetPosCmd().c_str());
         const char* file_name = "04_blue.tga";
         printf("Found portal, generating overlay image\n");
         CreateOverlayPortalImage(pp, file_name, 1000, true);
@@ -366,7 +370,7 @@ static void FindComplexChain()
         if (pp.blue.pos.DistToSqr(pp.orange.pos) < 200 * 200)
             continue;
         pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
-        Entity ent{pp.blue.pos};
+        Entity ent = Entity::CreatePlayerFromCenter(pp.blue.pos, true);
         EntityInfo ent_info{
             .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
             .origin_inbounds = true,
@@ -378,7 +382,7 @@ static void FindComplexChain()
             continue;
         printf("iteration %u, %u teleports, %d cum teleports\n", i, chain.tp_dirs.size(), chain.cum_primary_tps);
         pp.PrintNewlocationCmd();
-        ent.PrintSetposCmd();
+        printf("%s\n", ent.GetSetPosCmd().c_str());
         printf("generating overlay image...\n");
         CreateOverlayPortalImage(pp, "complex_chain.tga", 1000, true);
         break;
@@ -396,7 +400,7 @@ static void DebugInfinite09Chain()
         QAngle{0.f, 0.f, 0.f},
     };
     pp.CalcTpMatrices(PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED);
-    Entity player{Vector{-127.96876f, -191.24300f, 182.03125f}};
+    Entity player = Entity::CreatePlayerFromCenter(Vector{-127.96876f, -191.24300f, 182.03125f}, true);
     TeleportChain chain;
     EntityInfo ent_info{
         .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
@@ -420,7 +424,7 @@ static void CreateSpinAnimation()
         if (pp.blue.pos.DistToSqr(pp.orange.pos) < 100 * 100)
             continue;
         pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
-        Entity ent{pp.blue.pos + pp.blue.r};
+        Entity ent = Entity::CreatePlayerFromCenter(pp.blue.pos + pp.blue.r, true);
         EntityInfo ent_info{
             .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
             .origin_inbounds = false,
@@ -428,7 +432,7 @@ static void CreateSpinAnimation()
         chain.Generate(pp, true, ent, ent_info, 10);
         if (chain.max_tps_exceeded || chain.cum_primary_tps != CUM_TP_NORMAL_TELEPORT)
             continue;
-        ent = Entity{pp.blue.pos - pp.blue.r};
+        ent = Entity::CreatePlayerFromCenter(pp.blue.pos - pp.blue.r, true);
         chain.Generate(pp, true, ent, ent_info, 10);
         if (chain.max_tps_exceeded || chain.cum_primary_tps != CUM_TP_VAG)
             continue;
@@ -458,7 +462,7 @@ static void FindInfiniteChain()
         if (pp.blue.pos.DistToSqr(pp.orange.pos) < 100 * 100)
             continue;
         pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
-        Entity player{pp.blue.pos};
+        Entity player = Entity::CreatePlayerFromCenter(pp.blue.pos, true);
         EntityInfo ent_info{
             .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
             .origin_inbounds = false,
@@ -467,7 +471,7 @@ static void FindInfiniteChain()
         if (!chain.max_tps_exceeded)
             continue;
         pp.PrintNewlocationCmd();
-        player.PrintSetposCmd();
+        printf("%s\n", player.GetSetPosCmd().c_str());
         break;
     }
 }
@@ -487,7 +491,7 @@ static void FindFiniteChainThatGivesNFE()
         if (pp.blue.pos.DistToSqr(pp.orange.pos) < 100 * 100)
             continue;
         pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
-        Entity player{pp.blue.pos};
+        Entity player = Entity::CreatePlayerFromCenter(pp.blue.pos, true);
         EntityInfo ent_info{
             .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
             .origin_inbounds = false,
@@ -503,7 +507,7 @@ static void FindFiniteChainThatGivesNFE()
             continue;
         printf("found chain of length %u on iteration %d\n", chain.tp_dirs.size(), i);
         pp.PrintNewlocationCmd();
-        Entity{chain.pts.front()}.PrintSetposCmd();
+        printf("%s\n", Entity::CreatePlayerFromCenter(chain.pts.front(), true).GetSetPosCmd().c_str());
         break;
     }
 }

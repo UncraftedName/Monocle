@@ -23,13 +23,14 @@ Entity NudgeEntityBehindPortalPlane(const Entity& ent, const Portal& portal, Vec
     Entity new_ent = ent;
 
     for (int i = 0; i < 2; i++) {
-        float nudge_towards = new_ent.origin[nudge_axis] + portal.plane.n[nudge_axis] * (i ? -10000.f : 10000.f);
+        Vector& ent_pos = new_ent.GetPosRef();
+        float nudge_towards = ent_pos[nudge_axis] + portal.plane.n[nudge_axis] * (i ? -10000.f : 10000.f);
         int ulp_diff_incr = i ? -1 : 1;
         constexpr int nudge_limit = 1000000;
         int n_nudges = 0;
 
         while (portal.ShouldTeleport(new_ent, false) != (bool)i && n_nudges++ < nudge_limit) {
-            new_ent.origin[nudge_axis] = std::nextafterf(new_ent.origin[nudge_axis], nudge_towards);
+            ent_pos[nudge_axis] = std::nextafterf(ent_pos[nudge_axis], nudge_towards);
             diff->Update(nudge_axis, ulp_diff_incr);
         }
 
@@ -204,7 +205,7 @@ void TeleportChain::PortalTouchEntity()
         if (SharedEnvironmentCheck<PORTAL>()) {
             bool ent_in_front =
                 GetPortal<PORTAL>().plane.n.Dot(transformed_ent.GetCenter()) > GetPortal<PORTAL>().plane.d;
-            bool player_stuck = transformed_ent.player ? !ent_info.origin_inbounds : false;
+            bool player_stuck = transformed_ent.isPlayer ? !ent_info.origin_inbounds : false;
             if (ent_in_front || player_stuck) {
                 if (owning_portal != PORTAL && owning_portal != PORTAL_NONE)
                     ReleaseOwnershipOfEntity<OppositePortalType<PORTAL>()>(false);

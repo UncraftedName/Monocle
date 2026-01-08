@@ -58,14 +58,14 @@ TEST_CASE("ShouldTeleport (no portal hole check)")
     INFO("entity is " << (is_player ? "player" : "non-player"));
 
     if (is_player) {
-        Entity ent1{p.pos - p.f};
+        Entity ent1 = Entity::CreatePlayerFromCenter(p.pos - p.f, true);
         REQUIRE(p.ShouldTeleport(ent1, false));
-        Entity ent2{p.pos + p.f};
+        Entity ent2 = Entity::CreatePlayerFromCenter(p.pos + p.f, true);
         REQUIRE_FALSE(p.ShouldTeleport(ent2, false));
     } else {
-        Entity ent1{p.pos - p.f, 0.f};
+        Entity ent1 = Entity::CreateBall(p.pos - p.f, 0.f);
         REQUIRE(p.ShouldTeleport(ent1, false));
-        Entity ent2{p.pos + p.f, 0.f};
+        Entity ent2 = Entity::CreateBall(p.pos + p.f, 0.f);
         REQUIRE_FALSE(p.ShouldTeleport(ent2, false));
     }
 }
@@ -167,17 +167,17 @@ TEST_CASE("ShouldTeleport (with portal hole check")
     switch (ent_type) {
         case 0: {
             UNSCOPED_INFO("entity is small ball");
-            ent = Entity{ent_pos, 1.f};
+            ent = Entity::CreateBall(ent_pos, 1.f);
             break;
         }
         case 1: {
             UNSCOPED_INFO("entity is ball w/ radius " << SPACING);
-            ent = Entity(ent_pos, SPACING);
+            ent = Entity::CreateBall(ent_pos, SPACING);
             break;
         }
         case 2: {
             UNSCOPED_INFO("entity is crouched player");
-            ent = Entity{ent_pos};
+            ent = Entity::CreatePlayerFromCenter(ent_pos, true);
             break;
         }
         default:
@@ -234,7 +234,7 @@ TEST_CASE("Teleport")
     Vector pt2 = p2.pos + (sign ? off2 : -off2);
 
     Vector center = p1_teleporting ? pt1 : pt2;
-    Entity ent = is_player ? Entity{center} : Entity{center, 0.f};
+    Entity ent = is_player ? Entity::CreatePlayerFromCenter(center, true) : Entity::CreateBall(center, 0.f);
     pp.Teleport(ent, p1_teleporting);
     REQUIRE_THAT(ent.GetCenter().DistToSqr(p1_teleporting ? pt2 : pt1), Catch::Matchers::WithinAbs(0.0, 0.01));
 }
@@ -260,7 +260,7 @@ TEST_CASE("Nudging point towards portal plane")
     // add a little "random" nudge
     pt[0] += pt[0] / 100000.f;
 
-    Entity ent = is_player ? Entity{pt} : Entity{pt, 0.f};
+    Entity ent = is_player ? Entity::CreatePlayerFromCenter(pt, true) : Entity::CreateBall(pt, 0.f);
     VecUlpDiff ulp_diff;
     Entity new_ent = NudgeEntityBehindPortalPlane(ent, p, &ulp_diff);
     REQUIRE(p.ShouldTeleport(new_ent, false));
@@ -268,8 +268,9 @@ TEST_CASE("Nudging point towards portal plane")
 
     if (ulp_diff.ax > 0) {
         // now nudge across the portal boundary (requires an ulp diff from the previous step)
-        float target = new_ent.origin[ulp_diff.ax] + p.plane.n[ulp_diff.ax];
-        new_ent.origin[ulp_diff.ax] = std::nextafterf(new_ent.origin[ulp_diff.ax], target);
+        Vector& ent_pos = new_ent.GetPosRef();
+        float target = ent_pos[ulp_diff.ax] + p.plane.n[ulp_diff.ax];
+        ent_pos[ulp_diff.ax] = std::nextafterf(ent_pos[ulp_diff.ax], target);
         REQUIRE_FALSE(p.ShouldTeleport(new_ent, false));
     }
 }
@@ -288,7 +289,7 @@ TEST_CASE("Teleport chain results in VAG")
         QAngle{0.f, 0.f, 0.f},
     };
     pp.CalcTpMatrices(PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED);
-    Entity player{Vector{-127.96876f, -191.24300f, 182.03125f}};
+    Entity player = Entity::CreatePlayerFromCenter(Vector{-127.96876f, -191.24300f, 182.03125f}, true);
 
     const int n_teleports_success = 3;
 
@@ -361,7 +362,7 @@ TEST_CASE("Teleport chain results in 5 teleports")
         QAngle{0.f, 0.f, 0.f},
     };
     pp.CalcTpMatrices(PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED);
-    Entity player{Vector{-127.96876f, -191.24300f, 182.03125f}};
+    Entity player = Entity::CreatePlayerFromCenter(Vector{-127.96876f, -191.24300f, 182.03125f}, true);
 
     const int n_teleports_success = 5;
 
@@ -447,7 +448,7 @@ TEST_CASE("Finite teleport chain results in free edicts")
         QAngle{0.f, 0.f, 0.f},
     };
     pp.CalcTpMatrices(PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED);
-    Entity player{Vector{-127.96876f, -191.24300f, 182.03125f}};
+    Entity player = Entity::CreatePlayerFromCenter(Vector{-127.96876f, -191.24300f, 182.03125f}, true);
     EntityInfo ent_info{
         .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
         .origin_inbounds = false,
@@ -591,7 +592,7 @@ TEST_CASE("SPT with IPC")
         PortalPair pp{blue, orange};
 
         pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
-        Entity player{blue.pos};
+        Entity player = Entity::CreatePlayerFromCenter(blue.pos, true);
         EntityInfo ent_info{
             .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
             .origin_inbounds = false,
@@ -617,26 +618,26 @@ TEST_CASE("SPT with IPC")
         */
 
         // clang-format off
-        Entity tmp_player{blue.pos + blue.f};
+        Entity tmp_player = Entity::CreatePlayerFromCenter(blue.pos + blue.f, true);
         auto& bp = pp.blue.pos; auto& op = pp.orange.pos;
         auto& ba = pp.blue.ang; auto& oa = pp.orange.ang;
         conn.SendCmd(
             "ent_fire orange newlocation \\\"%.9g %.9g %.9g %.9g %.9g %.9g\\\"; "
             "ent_fire blue   newlocation \\\"%.9g %.9g %.9g %.9g %.9g %.9g\\\"; "
-            "setpos %.9g %.9g %.9g",
+            "%s",
             op.x, op.y, op.z, oa.x, oa.y, oa.z,
             bp.x, bp.y, bp.z, ba.x, ba.y, ba.z,
-            tmp_player.origin.x, tmp_player.origin.y, tmp_player.origin.z
+            tmp_player.GetSetPosCmd().c_str()
         );
         // clang-format on
         conn.RecvAck();
-        Vector boundary_setpos = chain.pre_teleported_ent.origin;
-        conn.SendCmd("setpos %.9g %.9g %.9g", boundary_setpos.x, boundary_setpos.y, boundary_setpos.z);
+        conn.SendCmd("%s", chain.pre_teleported_ent.GetSetPosCmd().c_str());
         conn.RecvAck();
 
         // timescale 1: sleep for 350ms, timescale 20: sleep for 10ms
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
+        // TODO handle if player is standing
         conn.SendCmd("spt_ipc_properties 1 m_vecOrigin");
         conn.RecvAck();
         conn.NextRecvMsg();
@@ -654,7 +655,7 @@ TEST_CASE("SPT with IPC")
         INFO("iteration " << iteration);
         INFO("expected " << (chain.cum_primary_tps == CUM_TP_VAG ? "VAG" : "normal teleport"));
         Entity expected_player_pos = chain.transformed_ent;
-        REQUIRE(actual_player_pos.DistToSqr(expected_player_pos.origin) < 100 * 100);
+        REQUIRE(actual_player_pos.DistToSqr(expected_player_pos.player.origin) < 100 * 100);
         printf("iteration %d: %s", iteration, chain.cum_primary_tps == CUM_TP_VAG ? "VAG\n" : "Normal teleport\n");
         iteration++;
     }

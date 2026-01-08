@@ -115,7 +115,7 @@ struct SearchResult {
                n_iterations,
                PlacementOrderStrs[(int)po]);
         pp.PrintNewlocationCmd();
-        ent.PrintSetposCmd();
+        printf("%s\n", ent.GetSetPosCmd().c_str());
     }
 };
 
@@ -145,14 +145,13 @@ struct SearchSpace {
             float um = rng.next_float((entry_pos_search & SEPF_UN) ? -PORTAL_HALF_HEIGHT : 0,
                                       (entry_pos_search & SEPF_UP) ? PORTAL_HALF_HEIGHT : 0);
             Vector ent_pos = p.pos + (p.r * rm + p.u * um) * .5f;
-            st.ent = tp_player ? Entity{ent_pos} : Entity{ent_pos, 1.f};
+            st.ent = tp_player ? Entity::CreatePlayerFromCenter(ent_pos, true) : Entity::CreateBall(ent_pos, 1.f);
             st.chain.Generate(st.pp, tp_from_blue, st.ent, ent_info, 3);
 
             if (i == 0) {
                 printf("sample portals:\n");
                 st.pp.PrintNewlocationCmd();
-                printf("sample player location:\n");
-                st.ent.PrintSetposCmd();
+                printf("sample player location:\n%s\n", st.ent.GetSetPosCmd().c_str());
                 printf("expected result for %s: ", PlacementOrderStrs[(int)st.po]);
                 if (st.chain.max_tps_exceeded)
                     printf("exceeded chain limit\n\n");

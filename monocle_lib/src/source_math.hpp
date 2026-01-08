@@ -2,6 +2,7 @@
 
 #include <float.h>
 #include <array>
+#include <string>
 
 #include "math.h"
 #include "stdio.h"
@@ -59,6 +60,7 @@ struct Vector {
 #else
     Vector() {}
 #endif
+    constexpr Vector(float v) : x{v}, y{v}, z{v} {}
     constexpr Vector(float x, float y, float z) : x{x}, y{y}, z{z} {}
 
     void print() const
@@ -219,34 +221,87 @@ struct VPlane {
     }
 };
 
+// g_DefaultViewVectors
 static constexpr Vector PLAYER_CROUCH_MINS{-16.f, -16.f, 0.f};
 static constexpr Vector PLAYER_CROUCH_MAXS{16.f, 16.f, 36.f};
+static constexpr Vector PLAYER_CROUCH_HALF = (PLAYER_CROUCH_MINS + PLAYER_CROUCH_MAXS) * .5f;
+static constexpr Vector PLAYER_STAND_MINS{-16.f, -16.f, 0.f};
+static constexpr Vector PLAYER_STAND_MAXS{16.f, 16.f, 72.f};
+static constexpr Vector PLAYER_STAND_HALF = (PLAYER_STAND_MINS + PLAYER_STAND_MAXS) * .5f;
 
 struct Entity {
 
-    bool player;
-    Vector origin;
-    // if player, use AABB; if non-player, treat as ball (game uses actually mesh but I don't need that)
-    float radius;
+    union {
+        // player - only store origin and do math to get center
+        struct {
+            Vector origin;
+            bool crouched;
+        } player;
 
-    Entity() : radius{NAN} {};
-    // player ctor
-    explicit Entity(const Vector& center)
-        : player{true}, origin{center - (PLAYER_CROUCH_MAXS + PLAYER_CROUCH_MINS) * .5f}, radius{NAN}
-    {}
-    // non-player ctor (assume center == origin)
-    explicit Entity(const Vector& center, float r) : player{false}, origin{center}, radius{r} {}
+        // non-player - treat as ball (game uses mesh but I'm approximating)
+        struct {
+            Vector center;
+            float radius;
+        } nonPlayer;
+    };
+
+    bool isPlayer;
+
+public:
+    Entity() {}
+
+    // named constructors
+
+    static Entity CreatePlayerFromOrigin(Vector origin, bool crouched)
+    {
+        Entity ent;
+        ent.isPlayer = true;
+        ent.player.origin = origin;
+        ent.player.crouched = crouched;
+        return ent;
+    }
+
+    static Entity CreatePlayerFromCenter(Vector center, bool crouched)
+    {
+        return CreatePlayerFromOrigin(center - (crouched ? PLAYER_CROUCH_HALF : PLAYER_STAND_HALF), crouched);
+    }
+
+    static Entity CreateBall(Vector center, float radius)
+    {
+        Entity ent;
+        ent.isPlayer = false;
+        ent.nonPlayer.center = center;
+        ent.nonPlayer.radius = radius;
+        return ent;
+    }
+
+    Vector GetWorldMins() const
+    {
+        if (isPlayer)
+            return player.origin + (player.crouched ? PLAYER_CROUCH_MINS : PLAYER_STAND_MINS);
+        return nonPlayer.center + Vector(nonPlayer.radius);
+    }
+
+    Vector GetWorldMaxs() const
+    {
+        if (isPlayer)
+            return player.origin + (player.crouched ? PLAYER_CROUCH_MAXS : PLAYER_STAND_MAXS);
+        return nonPlayer.center + Vector(nonPlayer.radius);
+    }
 
     Vector GetCenter() const
     {
-        return player ? origin + (PLAYER_CROUCH_MAXS + PLAYER_CROUCH_MINS) * .5f : origin;
+        if (isPlayer)
+            return player.origin + (player.crouched ? PLAYER_CROUCH_HALF : PLAYER_STAND_HALF);
+        return nonPlayer.center;
     }
 
-    void PrintSetposCmd() const
+    Vector& GetPosRef()
     {
-        assert(player);
-        printf("setpos %.9g %.9g %.9g\n", origin.x, origin.y, origin.z);
+        return isPlayer ? player.origin : nonPlayer.center;
     }
+
+    std::string GetSetPosCmd() const;
 };
 
 struct plane_bits {

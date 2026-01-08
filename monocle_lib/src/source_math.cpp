@@ -1,7 +1,8 @@
+#include "source_math.hpp"
+
 #include <cstring>
 #include <cmath>
-
-#include "source_math.hpp"
+#include <format>
 
 extern "C" {
 void __cdecl AngleMatrix(const QAngle* angles, matrix3x4_t* matrix);
@@ -75,18 +76,18 @@ bool Portal::ShouldTeleport(const Entity& ent, bool check_portal_hole) const
     * This portal hole check is an approximation and isn't meant to exactly replicate what the game
     * does. The game actually uses vphys to check if the entity or player collides with the portal
     * hole mesh, but I only care about high precision on the portal boundary. For portal hole
-    * checks, I assume the entity is a crouched player or a ball.
+    * checks, I assume the entity is a player or a ball.
     */
-    if (ent.player) {
-        Vector world_mins = ent.origin + PLAYER_CROUCH_MINS;
-        Vector world_maxs = ent.origin + PLAYER_CROUCH_MAXS;
+    if (ent.isPlayer) {
+        Vector world_mins = ent.GetWorldMins();
+        Vector world_maxs = ent.GetWorldMaxs();
         for (int i = 0; i < 6; i++)
             if (BoxOnPlaneSide(world_mins, world_maxs, hole_planes[i], hole_planes_bits[i]) == PSR_FRONT)
                 return false;
     } else {
-        assert(("entities that are too small will fail portal hole check", ent.radius >= 1.f));
+        assert(("entities that are too small will fail portal hole check", ent.nonPlayer.radius >= 1.f));
         for (int i = 0; i < 6; i++)
-            if (BallOnPlaneSide(ent.origin, ent.radius, hole_planes[i]) == PSR_FRONT)
+            if (BallOnPlaneSide(ent.nonPlayer.center, ent.nonPlayer.radius, hole_planes[i]) == PSR_FRONT)
                 return false;
     }
     return true;
@@ -146,12 +147,13 @@ void PortalPair::Teleport(Entity& ent, bool tp_from_blue) const
 {
     // you haven't called CalcTpMatrices yet!!!
     assert(!std::isnan(b_to_o.m[3][3]) && !std::isnan(o_to_b.m[3][3]));
+    assert(!ent.isPlayer || ent.player.crouched); // TODO curl up into a little ball
     Vector new_origin;
     Vector center = ent.GetCenter();
     VMatrix__operatorVec(tp_from_blue ? &b_to_o : &o_to_b, &new_origin, &center);
-    if (ent.player)
-        new_origin += ent.origin - center;
-    ent.origin = new_origin;
+    if (ent.isPlayer)
+        new_origin += ent.player.origin - center;
+    ent.player.origin = new_origin;
 }
 
 Vector PortalPair::Teleport(const Vector& pt, bool tp_from_blue) const
@@ -229,4 +231,10 @@ int BallOnPlaneSide(const Vector& c, float r, const VPlane& p)
     if (d <= -r)
         return PSR_BACK;
     return PSR_ON;
+}
+
+std::string Entity::GetSetPosCmd() const
+{
+    assert(isPlayer);
+    return std::format("setpos {:.9g} {:.9g} {:.9g}", player.origin.x, player.origin.y, player.origin.z);
 }
