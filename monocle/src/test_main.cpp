@@ -261,8 +261,7 @@ TEST_CASE("Nudging point towards portal plane")
     pt[0] += pt[0] / 100000.f;
 
     Entity ent = is_player ? Entity::CreatePlayerFromCenter(pt, true) : Entity::CreateBall(pt, 0.f);
-    VecUlpDiff ulp_diff;
-    Entity new_ent = NudgeEntityBehindPortalPlane(ent, p, &ulp_diff);
+    auto [new_ent, ulp_diff] = NudgeEntityBehindPortalPlane(ent, p);
     REQUIRE(p.ShouldTeleport(new_ent, false));
     REQUIRE(p.ShouldTeleport(ent, false) == ulp_diff.PtWasBehindPlane());
 

@@ -501,9 +501,8 @@ static void FindFiniteChainThatGivesNFE()
             continue;
         if (chain.cum_primary_tps != 0)
             continue;
-        VecUlpDiff diff;
-        NudgeEntityBehindPortalPlane(chain.transformed_ent, pp.blue, &diff);
-        if (!diff.PtWasBehindPlane())
+        auto [nudged_ent, ulp_diff] = NudgeEntityBehindPortalPlane(chain.transformed_ent, pp.blue);
+        if (!ulp_diff.PtWasBehindPlane())
             continue;
         printf("found chain of length %u on iteration %d\n", chain.tp_dirs.size(), i);
         pp.PrintNewlocationCmd();
@@ -670,4 +669,13 @@ int main()
     SyncFloatingPointControlWord();
 
     FindVagIn09EleTop();
+
+    PortalPair pp{
+        Vector{255.96875f, -161.01295f, 201.96877f},
+        QAngle{-0.f, 180.f, 0.f},
+        Vector{-127.96875f, -191.24300f, 182.03125f},
+        QAngle{0.f, 0.f, 0.f},
+    };
+
+    GenerateTeleportChainParams p(&pp, Entity::CreatePlayerFromCenter(pp.blue.pos, true));
 }

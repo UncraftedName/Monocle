@@ -4,6 +4,8 @@
 #include <vector>
 #include <deque>
 #include <string>
+#include <memory>
+#include <utility>
 
 #include "source_math.hpp"
 
@@ -11,40 +13,47 @@ class DotGen;
 
 /*
 * Represents a difference between two Vectors in ULPs. All VAG related code only nudges points
-* along a single axis, hence the abstraction. For VAG code positive ulps means in the same
-* direction as the portal normal.
+* along a single axis, hence the abstraction. For VAG code a positive diff is in the same
+* direction as the portal normal, and diff=0 means exactly 
 */
 struct VecUlpDiff {
-    int ax;   // [0, 2] - the axis along which the difference is measured
-    int diff; // the difference in ulps
+    uint32_t ax : 2;            // [0, 2] - the axis along which the difference is measured
+    int diff : 29;              // the difference in ulps
+    uint32_t diff_overflow : 1; // if set, the difference is bigger than can be expressed
+
+    VecUlpDiff()
+    {
+        Reset();
+    }
 
     void Reset()
     {
-        ax = -1;
+        ax = 3;
         diff = 0;
+        diff_overflow = 0;
     }
 
     void Update(int along, int by)
     {
-        assert(ax == -1 || along == ax || by == 0);
+        assert(ax == 3 || along == ax || by == 0);
         ax = along;
         diff += by;
     }
 
     void SetInvalid()
     {
-        ax = -666;
+        ax = 3;
     }
 
     bool Valid() const
     {
-        return ax != -666;
+        return ax != 3;
     }
 
     bool PtWasBehindPlane() const
     {
         assert(Valid());
-        return diff >= 0;
+        return diff <= 0; // TODO isn't this the opposite of what I want?
     }
 };
 
@@ -52,8 +61,12 @@ struct VecUlpDiff {
 * Calculates how many ulp nudges were needed to move the given entity until it's behind the portal
 * plane as determined by Portal::ShouldTeleport(). If the point is already behind, nudges are done
 * in the direction of the portal normal so long as ShouldTeleport returns true.
+* 
+* TODO check if this has the write comment and result
 */
-Entity NudgeEntityBehindPortalPlane(const Entity& ent, const Portal& portal, VecUlpDiff* ulp_diff);
+std::pair<Entity, VecUlpDiff> NudgeEntityBehindPortalPlane(const Entity& ent,
+                                                           const Portal& portal,
+                                                           size_t n_max_nudges = 1000);
 
 #define CUM_TP_NORMAL_TELEPORT 1
 #define CUM_TP_VAG (-1)
@@ -67,6 +80,93 @@ struct EntityInfo {
     // is the origin of the map inbounds?
     bool origin_inbounds;
 };
+
+// opt-in flags for stuff that's recorded for every teleport
+enum TeleportChainRecordFlags : uint32_t {
+    TCRF_NONE = 0,
+    TCRF_RECORD_ENTITY = 1 << 0,
+    // do not use for LAG/AAG - those teleport the player center far away from the portal plane
+    TCRF_RECORD_ULP_DIFFS = 1 << 1,
+
+    TCRF_RECORD_ALL = ~0u,
+};
+
+struct GenerateTeleportChainParams {
+    // the portals used for the teleport(s)
+    const PortalPair* pp;
+    // the entity being teleported
+    Entity ent;
+    /*
+    * The number of children the entity has. Usually this is N_CHILDREN_PLAYER_WITH_PORTAL_GUN for
+    * the player and 0 otherwise.
+    * 
+    * This *is* used in the chain generation code, and it's possible that it may be relevant in
+    * that it may be relevant in some niche cases, although I haven't found any (yet).
+    */
+    unsigned char n_ent_children;
+    /*
+    * If true, the entity will be nudged until it is "1 ulp" behind the portal plane (along the
+    * largest axis of the portal normal). Otherwise, an entity in front of the portal will not
+    * be teleported at all. If you set this to true, check that the entity is very close to
+    */
+    bool nudge_to_first_portal_plane = true;
+    /*
+    * In the map where these portals exist, is the map origin inbounds?
+    * 
+    * This *is* used in the chain generation code, and it's possible that it may be relevant in
+    * that it may be relevant in some niche cases, although I haven't found any (yet).
+    */
+    bool map_origin_inbounds = false;
+    // which portal is the first teleport from?
+    bool first_tp_from_blue;
+    TeleportChainRecordFlags recordFlags = TCRF_RECORD_ENTITY;
+    // limit the maximum number of teleports that the chain can do
+    size_t n_max_teleports = 10;
+    // if using TCRF_RECORD_ULP_DIFFS, this is the max number of nudges to attempt for each portal,
+    // if this number is exceeded, the ulp diff is set to invalid
+    /*
+    * If nudge_to_first_portal_plane=true, this is the maximum number of nudges done only for the
+    * first portal. If the max number of nudge is exceeded, first_ulp_nudge_exceed will be true in
+    * the result struct and no teleports will be done.
+    * 
+    * If TCRF_RECORD_ULP_DIFFS is set, this is the maximum number of nudges done at each teleport
+    * where the entity is at a portal boundary (cum_tp == 0 || cum_tp == 1).
+    */
+    size_t n_max_ulp_nudges = 100;
+
+    struct InternalState;
+    mutable std::unique_ptr<InternalState> _st;
+
+    // for internal use - have to keep them in the header for dot_gen.cpp
+    struct InternalStateDefs {
+        using queue_entry = short;
+        using queue_type = std::deque<queue_entry>;
+
+        using portal_type = queue_entry;
+        static constexpr queue_entry FUNC_RECHECK_COLLISION = 0;
+        static constexpr portal_type FUNC_TP_BLUE = 1;
+        static constexpr portal_type FUNC_TP_ORANGE = 2;
+        static constexpr portal_type PORTAL_NONE = 0;
+    };
+
+    GenerateTeleportChainParams(const PortalPair* pp, Entity ent);
+
+    ~GenerateTeleportChainParams();
+};
+
+// TODO doc
+struct TeleportChainResult {
+    bool max_tps_exceeded;
+    bool first_ulp_nudge_exceed;
+    int total_n_teleports;
+    int cum_teleports;
+    Entity ent;
+    std::vector<Entity> ents;
+    std::vector<VecUlpDiff> ulp_diffs_from_portal_plane;
+    DotGen* dg = nullptr;
+};
+
+void GenerateTeleportChain(const GenerateTeleportChainParams& params, TeleportChainResult& result);
 
 class TeleportChain {
 
@@ -204,9 +304,10 @@ public:
     } style;
 
     // clears the state and starts a new graph, with the given color for the initial teleport portal
-    void PushRootNode(bool blue);
+    void ResetAndPushRootNode(bool blue);
     void PushCallQueuedNode(bool queued_teleport, const TeleportChain::queue_type& queue, int from_touch_call_idx);
-    void PushTeleportNode(bool blue, int cum_teleports, VecUlpDiff ulpDiff);
+    // planeSide=-1 -> ShouldTeleport()=true, planeSide=1 -> ShouldTeleport()=false, otherwise ignored
+    void PushTeleportNode(bool blue, int cum_teleports, int planeSide);
     void PushExceededTpNode(bool blue);
 
     // for every push, there is a pop

@@ -46,7 +46,7 @@ struct std::formatter<tp_queue_view, Char> {
     }
 };
 
-void DotGen::PushRootNode(bool blue)
+void DotGen::ResetAndPushRootNode(bool blue)
 {
     nodeStack.clear();
     buf.clear();
@@ -76,7 +76,7 @@ void DotGen::PushCallQueuedNode(bool queued_teleport, const TeleportChain::queue
                        queued_teleport ? style.teleportEdgeAttributes : style.defaultEdgeAttributes);
 }
 
-void DotGen::PushTeleportNode(bool blue, int cum_teleports, VecUlpDiff ulpDiff)
+void DotGen::PushTeleportNode(bool blue, int cum_teleports, int planeSide)
 {
     int lastNode = nodeStack.back();
     int newNode = nodeStack.emplace_back(nodeCounter++);
@@ -94,7 +94,7 @@ void DotGen::PushTeleportNode(bool blue, int cum_teleports, VecUlpDiff ulpDiff)
                        ">; shape = plaintext; color = {}];",
                        newNode,
                        cum_teleports,
-                       ulpDiff.Valid() ? (ulpDiff.PtWasBehindPlane() ? "B" : "F") : "",
+                       std::abs(planeSide) == 1 ? (planeSide == -1 ? "B" : "F") : "",
                        blue ? style.orangeCol : style.blueCol,
                        blue ? style.orangeCol : style.blueCol,
                        blue ? style.blueCol : style.orangeCol);

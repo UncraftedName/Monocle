@@ -131,6 +131,12 @@ struct Vector {
         return (float)d.Dot(d);
     }
 
+    // probably not accurate to game code
+    float DistTo(const Vector& v) const
+    {
+        return sqrtf(DistToSqr(v));
+    }
+
     constexpr Vector operator*(float f) const
     {
         return Vector{x * f, y * f, z * f};
@@ -212,6 +218,12 @@ struct VPlane {
     VPlane() {}
 #endif
     constexpr VPlane(const Vector& n, float d) : n{n}, d{d} {}
+
+    // not accurate to what game does
+    float DistTo(const Vector& v) const
+    {
+        return (float)(n.Dot(v) - d);
+    }
 
     void print() const
     {
