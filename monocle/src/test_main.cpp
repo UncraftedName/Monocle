@@ -235,7 +235,7 @@ TEST_CASE("Teleport")
 
     Vector center = p1_teleporting ? pt1 : pt2;
     Entity ent = is_player ? Entity::CreatePlayerFromCenter(center, true) : Entity::CreateBall(center, 0.f);
-    pp.Teleport(ent, p1_teleporting);
+    ent = pp.Teleport(ent, p1_teleporting);
     REQUIRE_THAT(ent.GetCenter().DistToSqr(p1_teleporting ? pt2 : pt1), Catch::Matchers::WithinAbs(0.0, 0.01));
 }
 
@@ -273,6 +273,87 @@ TEST_CASE("Nudging point towards portal plane")
         ent_pos[ulp_diff.ax] = std::nextafterf(ent_pos[ulp_diff.ax], target);
         REQUIRE_FALSE(p.ShouldTeleport(new_ent, false));
     }
+}
+
+TEST_CASE("19 Lochness")
+{
+    PortalPair pp{
+        Vector{-416.247498f, 735.368835f, 255.96875f},
+        QAngle{90.f, -90.2385559f, 0.f},
+        Vector{-394.776428f, -56.0312462f, 38.8377686f},
+        QAngle{-44.9994202f, 180.f, 0.f},
+    };
+    pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
+    Entity player = Entity::CreatePlayerFromOrigin(Vector{-416.247498f, 735.368835f, 219.97f}, false);
+    EntityInfo ent_info{
+        .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+        .origin_inbounds = false,
+    };
+
+    TeleportChain chain;
+    chain.Generate(pp, true, player, ent_info, 5);
+
+    Entity roughExpectedEnt = Entity::CreatePlayerFromOrigin(Vector{398.634583f, 599.235168f, 400.928467f}, true);
+
+    REQUIRE(chain.cum_primary_tps == -1);
+    REQUIRE_THAT(std::sqrtf(chain.pts.back().DistToSqr(roughExpectedEnt.GetCenter())),
+                 Catch::Matchers::WithinAbs(0, .01f));
+}
+
+TEST_CASE("E01 AAG")
+{
+    PortalPair pp{
+        Vector{-141.904663f, 730.353394f, -191.417892f},
+        QAngle{15.9453955f, 180.f, 0.f},
+        Vector{-233.054321f, 652.257446f, -255.96875f},
+        QAngle{-90.f, 155.909348f, 0.f},
+    };
+    pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
+    Entity player = Entity::CreatePlayerFromOrigin(Vector{-136.239883, 726.482483, -240.416977}, false);
+    EntityInfo ent_info{
+        .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+        .origin_inbounds = false,
+    };
+
+    TeleportChain chain;
+    chain.Generate(pp, true, player, ent_info, 5);
+
+    Entity roughExpectedEnt = Entity::CreatePlayerFromOrigin(Vector{-93.691399f, 636.419739f, -166.272324f}, true);
+
+    REQUIRE(chain.cum_primary_tps == -1);
+    REQUIRE_THAT(std::sqrtf(chain.pts.back().DistToSqr(roughExpectedEnt.GetCenter())),
+                 Catch::Matchers::WithinAbs(0, 2.f));
+}
+
+TEST_CASE("00 AAG")
+{
+    /*
+    * The bottom half of the diagonal surface in the 00 button room has a fucked up normal which
+    * causes an AAG. This is very similar to why the PPNF (Portal Placement Never Fail) category
+    * can abuse a lot of AAGs in random places - for some reason static prop normals are often
+    * messed up in the same way.
+    */
+    PortalPair pp{
+        Vector{-474.710541f, -1082.65906f, 182.03125f},
+        QAngle{0.00538991531f, 135.f, 0.f},
+        Vector{-735.139282f, -923.540344f, 128.03125f},
+        QAngle{-90.f, 55.0390396f, 0.f},
+    };
+    pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
+    Entity player = Entity::CreatePlayerFromOrigin(Vector{-474.604370f, -1082.235498f, 128.031250f}, false);
+    EntityInfo ent_info{
+        .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
+        .origin_inbounds = false,
+    };
+
+    TeleportChain chain;
+    chain.Generate(pp, true, player, ent_info, 5);
+
+    Entity roughExpectedEnt = Entity::CreatePlayerFromOrigin(Vector{-629.746887f, -1311.233398f, 138.827957f}, true);
+
+    REQUIRE(chain.cum_primary_tps == -1);
+    REQUIRE_THAT(std::sqrtf(chain.pts.back().DistToSqr(roughExpectedEnt.GetCenter())),
+                 Catch::Matchers::WithinAbs(0, 2.f));
 }
 
 TEST_CASE("Teleport chain results in VAG")

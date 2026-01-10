@@ -143,17 +143,35 @@ void PortalPair::CalcTpMatrices(PlacementOrder order)
     }
 }
 
-void PortalPair::Teleport(Entity& ent, bool tp_from_blue) const
+Entity PortalPair::Teleport(const Entity& ent, bool tp_from_blue) const
 {
     // you haven't called CalcTpMatrices yet!!!
     assert(!std::isnan(b_to_o.m[3][3]) && !std::isnan(o_to_b.m[3][3]));
-    assert(!ent.isPlayer || ent.player.crouched); // TODO curl up into a little ball
-    Vector new_origin;
-    Vector center = ent.GetCenter();
-    VMatrix__operatorVec(tp_from_blue ? &b_to_o : &o_to_b, &new_origin, &center);
+
+    Vector oldCenter = ent.GetCenter();
+    const Vector& oldPlayerOrigin = ent.player.origin;
+    bool playerCrouched = ent.player.crouched;
+
+    if (ent.isPlayer) {
+        const Portal& p = tp_from_blue ? blue : orange;
+        const Portal& op = tp_from_blue ? orange : blue;
+
+        if (!playerCrouched && std::fabsf(p.f.z) > 0.f &&
+            (std::fabsf(std::fabs(p.f.z) - 1.f) >= .01f || std::fabsf(std::fabs(op.f.z) - 1.f) >= .01f)) {
+            // curl up into a little ball
+            if (p.f.z > 0.f)
+                oldCenter.z -= 16.f;
+            else
+                oldCenter.z += 16.f;
+            playerCrouched = true;
+        }
+    }
+
+    Vector newCenter;
+    VMatrix__operatorVec(tp_from_blue ? &b_to_o : &o_to_b, &newCenter, &oldCenter);
     if (ent.isPlayer)
-        new_origin += ent.player.origin - center;
-    ent.player.origin = new_origin;
+        return Entity::CreatePlayerFromOrigin(newCenter + (oldPlayerOrigin - oldCenter), playerCrouched);
+    return Entity::CreateBall(newCenter, ent.nonPlayer.radius);
 }
 
 Vector PortalPair::Teleport(const Vector& pt, bool tp_from_blue) const

@@ -25,7 +25,7 @@ inline void SyncFloatingPointControlWord()
     assert(!err);
 }
 
-#ifdef _DEBUG
+#ifndef NDEBUG
 #define DEBUG_NAN_CTORS
 #endif
 
@@ -248,7 +248,11 @@ struct Entity {
     bool isPlayer;
 
 public:
+#ifdef DEBUG_NAN_CTORS
+    Entity() : isPlayer(true), player(Vector{}, true) {}
+#else
     Entity() {}
+#endif
 
     // named constructors
 
@@ -439,7 +443,7 @@ struct PortalPair {
     void CalcTpMatrices(PlacementOrder order);
 
     // TeleportTouchingEntity (if player, assumes they are crouched)
-    void Teleport(Entity& ent, bool tp_from_blue) const;
+    Entity Teleport(const Entity& ent, bool tp_from_blue) const;
     Vector Teleport(const Vector& pt, bool tp_from_blue) const;
 
     void print() const

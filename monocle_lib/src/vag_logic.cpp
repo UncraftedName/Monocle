@@ -26,7 +26,7 @@ Entity NudgeEntityBehindPortalPlane(const Entity& ent, const Portal& portal, Vec
         Vector& ent_pos = new_ent.GetPosRef();
         float nudge_towards = ent_pos[nudge_axis] + portal.plane.n[nudge_axis] * (i ? -10000.f : 10000.f);
         int ulp_diff_incr = i ? -1 : 1;
-        constexpr int nudge_limit = 1000000;
+        constexpr int nudge_limit = 10000000;
         int n_nudges = 0;
 
         while (portal.ShouldTeleport(new_ent, false) != (bool)i && n_nudges++ < nudge_limit) {
@@ -244,7 +244,7 @@ void TeleportChain::TeleportEntity()
 
     tp_dirs.push_back(PortalIsPrimary<PORTAL>());
     cum_primary_tps += PortalIsPrimary<PORTAL>() ? 1 : -1;
-    pp->Teleport(transformed_ent, PORTAL == FUNC_TP_BLUE);
+    transformed_ent = pp->Teleport(transformed_ent, PORTAL == FUNC_TP_BLUE);
     pts.push_back(transformed_ent.GetCenter());
     tps_queued.push_back(0);
 
