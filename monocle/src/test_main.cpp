@@ -261,99 +261,19 @@ TEST_CASE("Nudging point towards portal plane")
     pt[0] += pt[0] / 100000.f;
 
     Entity ent = is_player ? Entity::CreatePlayerFromCenter(pt, true) : Entity::CreateBall(pt, 0.f);
-    VecUlpDiff ulp_diff;
-    Entity new_ent = NudgeEntityBehindPortalPlane(ent, p, &ulp_diff);
-    REQUIRE(p.ShouldTeleport(new_ent, false));
+    auto [nudged_ent, ulp_diff] = NudgeEntityBehindPortalPlane(ent, p);
+    REQUIRE(ulp_diff.Valid());
     REQUIRE(p.ShouldTeleport(ent, false) == ulp_diff.PtWasBehindPlane());
 
-    if (ulp_diff.ax > 0) {
-        // now nudge across the portal boundary (requires an ulp diff from the previous step)
-        Vector& ent_pos = new_ent.GetPosRef();
+    if (!ulp_diff.diff_overflow) {
+        // nudged entity is guaranteed to be behind the portal
+        REQUIRE(p.ShouldTeleport(nudged_ent, false));
+        // nudge the entity across the portal boundary
+        Vector& ent_pos = nudged_ent.GetPosRef();
         float target = ent_pos[ulp_diff.ax] + p.plane.n[ulp_diff.ax];
         ent_pos[ulp_diff.ax] = std::nextafterf(ent_pos[ulp_diff.ax], target);
-        REQUIRE_FALSE(p.ShouldTeleport(new_ent, false));
+        REQUIRE_FALSE(p.ShouldTeleport(nudged_ent, false));
     }
-}
-
-TEST_CASE("19 Lochness")
-{
-    PortalPair pp{
-        Vector{-416.247498f, 735.368835f, 255.96875f},
-        QAngle{90.f, -90.2385559f, 0.f},
-        Vector{-394.776428f, -56.0312462f, 38.8377686f},
-        QAngle{-44.9994202f, 180.f, 0.f},
-    };
-    pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
-    Entity player = Entity::CreatePlayerFromOrigin(Vector{-416.247498f, 735.368835f, 219.97f}, false);
-    EntityInfo ent_info{
-        .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-        .origin_inbounds = false,
-    };
-
-    TeleportChain chain;
-    chain.Generate(pp, true, player, ent_info, 5);
-
-    Entity roughExpectedEnt = Entity::CreatePlayerFromOrigin(Vector{398.634583f, 599.235168f, 400.928467f}, true);
-
-    REQUIRE(chain.cum_primary_tps == -1);
-    REQUIRE_THAT(std::sqrtf(chain.pts.back().DistToSqr(roughExpectedEnt.GetCenter())),
-                 Catch::Matchers::WithinAbs(0, .01f));
-}
-
-TEST_CASE("E01 AAG")
-{
-    PortalPair pp{
-        Vector{-141.904663f, 730.353394f, -191.417892f},
-        QAngle{15.9453955f, 180.f, 0.f},
-        Vector{-233.054321f, 652.257446f, -255.96875f},
-        QAngle{-90.f, 155.909348f, 0.f},
-    };
-    pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
-    Entity player = Entity::CreatePlayerFromOrigin(Vector{-136.239883, 726.482483, -240.416977}, false);
-    EntityInfo ent_info{
-        .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-        .origin_inbounds = false,
-    };
-
-    TeleportChain chain;
-    chain.Generate(pp, true, player, ent_info, 5);
-
-    Entity roughExpectedEnt = Entity::CreatePlayerFromOrigin(Vector{-93.691399f, 636.419739f, -166.272324f}, true);
-
-    REQUIRE(chain.cum_primary_tps == -1);
-    REQUIRE_THAT(std::sqrtf(chain.pts.back().DistToSqr(roughExpectedEnt.GetCenter())),
-                 Catch::Matchers::WithinAbs(0, 2.f));
-}
-
-TEST_CASE("00 AAG")
-{
-    /*
-    * The bottom half of the diagonal surface in the 00 button room has a fucked up normal which
-    * causes an AAG. This is very similar to why the PPNF (Portal Placement Never Fail) category
-    * can abuse a lot of AAGs in random places - for some reason static prop normals are often
-    * messed up in the same way.
-    */
-    PortalPair pp{
-        Vector{-474.710541f, -1082.65906f, 182.03125f},
-        QAngle{0.00538991531f, 135.f, 0.f},
-        Vector{-735.139282f, -923.540344f, 128.03125f},
-        QAngle{-90.f, 55.0390396f, 0.f},
-    };
-    pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
-    Entity player = Entity::CreatePlayerFromOrigin(Vector{-474.604370f, -1082.235498f, 128.031250f}, false);
-    EntityInfo ent_info{
-        .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-        .origin_inbounds = false,
-    };
-
-    TeleportChain chain;
-    chain.Generate(pp, true, player, ent_info, 5);
-
-    Entity roughExpectedEnt = Entity::CreatePlayerFromOrigin(Vector{-629.746887f, -1311.233398f, 138.827957f}, true);
-
-    REQUIRE(chain.cum_primary_tps == -1);
-    REQUIRE_THAT(std::sqrtf(chain.pts.back().DistToSqr(roughExpectedEnt.GetCenter())),
-                 Catch::Matchers::WithinAbs(0, 2.f));
 }
 
 TEST_CASE("Teleport chain results in VAG")
@@ -370,57 +290,62 @@ TEST_CASE("Teleport chain results in VAG")
         QAngle{0.f, 0.f, 0.f},
     };
     pp.CalcTpMatrices(PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED);
-    Entity player = Entity::CreatePlayerFromCenter(Vector{-127.96876f, -191.24300f, 182.03125f}, true);
+
+    TeleportChainParams params{
+        &pp,
+        Entity::CreatePlayerFromCenter(Vector{-127.96876f, -191.24300f, 182.03125f}, true),
+    };
+    params.nudge_to_first_portal_plane = true;
+    params.record_flags = TCRF_RECORD_ALL;
+    TeleportChainResult result;
+
+    Vector target_vag_pos = pp.Teleport(params.ent.GetCenter(), true);
 
     const int n_teleports_success = 3;
 
     for (int n_max_teleports = 0; n_max_teleports < n_teleports_success + 2; n_max_teleports++) {
         DYNAMIC_SECTION("teleport limit is " << n_max_teleports)
         {
-            Vector target_vag_pos = pp.Teleport(player.GetCenter(), true);
-            EntityInfo ent_info{
-                .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-                .origin_inbounds = false,
-            };
-            TeleportChain chain;
-            chain.Generate(pp, false, player, ent_info, n_max_teleports);
-            Entity new_player = chain.transformed_ent;
-            int n_actual_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
+            params.n_max_teleports = n_max_teleports;
+            GenerateTeleportChain(params, result);
 
-            REQUIRE(chain.max_tps_exceeded == (n_actual_teleports < n_teleports_success));
-            REQUIRE(chain.tp_dirs.size() == n_actual_teleports);
-            REQUIRE(chain.tps_queued.size() == (n_actual_teleports + 1));
-            REQUIRE(chain.pts.size() == (n_actual_teleports + 1));
-            REQUIRE(chain.ulp_diffs.size() == (n_actual_teleports + 1));
-            REQUIRE(chain.cum_primary_tps == std::vector<int>{0, 1, 0, -1}[n_actual_teleports]);
+            int n_expected_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
 
-            switch (n_actual_teleports) {
+            REQUIRE_FALSE(result.first_ulp_nudge_exceed);
+            REQUIRE(result.total_n_teleports == n_expected_teleports);
+            REQUIRE(result.max_tps_exceeded == (n_expected_teleports < n_teleports_success));
+            REQUIRE(result.tp_dirs.size() == n_expected_teleports);
+            REQUIRE(result.ents.size() == (n_expected_teleports + 1));
+            REQUIRE(result.ulp_diffs_from_portal_plane.size() == (n_expected_teleports + 1));
+            REQUIRE(result.cum_teleports == std::vector<int>{0, 1, 0, -1}[n_expected_teleports]);
+            REQUIRE(result.ents[0] == params.ent);
+            REQUIRE(result.ents.back() == result.ent);
+
+            switch (n_expected_teleports) {
                 case 3:
-                    REQUIRE(chain.tp_dirs[2] == false);
-                    REQUIRE(chain.tps_queued[3] == 0);
-                    REQUIRE_THAT(chain.pts[3].DistToSqr(target_vag_pos), Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE_THAT(new_player.GetCenter().DistToSqr(target_vag_pos), Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE_FALSE(chain.ulp_diffs[3].Valid());
+                    REQUIRE(result.tp_dirs[2] == false);
+                    REQUIRE_THAT(result.ents[3].GetCenter().DistToSqr(target_vag_pos),
+                                 Catch::Matchers::WithinAbs(0, .5f));
+                    REQUIRE_FALSE(result.ulp_diffs_from_portal_plane[3].Valid());
                     [[fallthrough]];
                 case 2:
-                    REQUIRE(chain.tp_dirs[1] == false);
-                    REQUIRE(chain.tps_queued[2] == 0);
-                    REQUIRE_THAT(chain.pts[2].DistToSqr(pp.orange.pos), Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE(chain.ulp_diffs[2].ax == 0);
-                    REQUIRE_FALSE(chain.ulp_diffs[2].PtWasBehindPlane());
+                    REQUIRE(result.tp_dirs[1] == false);
+                    REQUIRE_THAT(result.ents[2].GetCenter().DistToSqr(pp.orange.pos),
+                                 Catch::Matchers::WithinAbs(0, .5f));
+                    REQUIRE(result.ulp_diffs_from_portal_plane[2].ax == 0);
+                    REQUIRE_FALSE(result.ulp_diffs_from_portal_plane[2].PtWasBehindPlane());
                     [[fallthrough]];
                 case 1:
-                    REQUIRE(chain.tp_dirs[0] == true);
-                    REQUIRE(chain.tps_queued[1] == -2);
-                    REQUIRE_THAT(chain.pts[1].DistToSqr(pp.blue.pos), Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE(chain.ulp_diffs[1].ax == 0);
-                    REQUIRE(chain.ulp_diffs[1].PtWasBehindPlane());
+                    REQUIRE(result.tp_dirs[0] == true);
+                    REQUIRE_THAT(result.ents[1].GetCenter().DistToSqr(pp.blue.pos), Catch::Matchers::WithinAbs(0, .5f));
+                    REQUIRE(result.ulp_diffs_from_portal_plane[1].ax == 0);
+                    REQUIRE(result.ulp_diffs_from_portal_plane[1].PtWasBehindPlane());
                     [[fallthrough]];
                 case 0:
-                    REQUIRE(chain.tps_queued[0] == 1);
-                    REQUIRE_THAT(chain.pts[0].DistToSqr(pp.orange.pos), Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE(chain.ulp_diffs[0].ax == 0);
-                    REQUIRE(chain.ulp_diffs[0].PtWasBehindPlane());
+                    REQUIRE_THAT(result.ents[0].GetCenter().DistToSqr(pp.orange.pos),
+                                 Catch::Matchers::WithinAbs(0, .5f));
+                    REQUIRE(result.ulp_diffs_from_portal_plane[0].ax == 0);
+                    REQUIRE(result.ulp_diffs_from_portal_plane[0].PtWasBehindPlane());
                     break;
                 default:
                     FAIL();
@@ -443,71 +368,73 @@ TEST_CASE("Teleport chain results in 5 teleports")
         QAngle{0.f, 0.f, 0.f},
     };
     pp.CalcTpMatrices(PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED);
-    Entity player = Entity::CreatePlayerFromCenter(Vector{-127.96876f, -191.24300f, 182.03125f}, true);
+
+    TeleportChainParams params{
+        &pp,
+        Entity::CreatePlayerFromCenter(Vector{-127.96876f, -191.24300f, 182.03125f}, true),
+    };
+    params.nudge_to_first_portal_plane = true;
+    params.record_flags = TCRF_RECORD_ALL;
+    TeleportChainResult result;
+
+    Vector target_vag_pos = pp.Teleport(params.ent.GetCenter(), true);
 
     const int n_teleports_success = 5;
 
     for (int n_max_teleports = 0; n_max_teleports < n_teleports_success + 2; n_max_teleports++) {
         DYNAMIC_SECTION("teleport limit is " << n_max_teleports)
         {
-            Vector target_vag_pos = pp.Teleport(player.GetCenter(), true);
+            params.n_max_teleports = n_max_teleports;
+            GenerateTeleportChain(params, result);
+            int n_expected_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
 
-            EntityInfo ent_info{
-                .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-                .origin_inbounds = false,
-            };
-            TeleportChain chain;
-            chain.Generate(pp, false, player, ent_info, n_max_teleports);
-            Entity new_player = chain.transformed_ent;
-            int n_actual_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
+            REQUIRE_FALSE(result.first_ulp_nudge_exceed);
+            REQUIRE(result.total_n_teleports == n_expected_teleports);
+            REQUIRE(result.max_tps_exceeded == (n_expected_teleports < n_teleports_success));
+            REQUIRE(result.tp_dirs.size() == n_expected_teleports);
+            REQUIRE(result.ents.size() == (n_expected_teleports + 1));
+            REQUIRE(result.ulp_diffs_from_portal_plane.size() == (n_expected_teleports + 1));
+            REQUIRE(result.cum_teleports == std::vector<int>{0, 1, 0, -1, 0, 1}[n_expected_teleports]);
+            REQUIRE(result.ents[0] == params.ent);
+            REQUIRE(result.ents.back() == result.ent);
 
-            REQUIRE(chain.max_tps_exceeded == (n_actual_teleports < n_teleports_success));
-            REQUIRE(chain.tp_dirs.size() == n_actual_teleports);
-            REQUIRE(chain.tps_queued.size() == (n_actual_teleports + 1));
-            REQUIRE(chain.pts.size() == (n_actual_teleports + 1));
-            REQUIRE(chain.ulp_diffs.size() == (n_actual_teleports + 1));
-            REQUIRE(chain.cum_primary_tps == std::vector<int>{0, 1, 0, -1, 0, 1}[n_actual_teleports]);
-
-            switch (n_actual_teleports) {
+            switch (n_expected_teleports) {
                 case 5:
-                    REQUIRE(chain.tp_dirs[4] == true);
-                    REQUIRE(chain.tps_queued[5] == 0);
-                    REQUIRE_THAT(chain.pts[5].DistToSqr(pp.blue.pos), Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE_THAT(new_player.GetCenter().DistToSqr(pp.blue.pos), Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE(chain.ulp_diffs[5].ax == 0);
-                    REQUIRE_FALSE(chain.ulp_diffs[5].PtWasBehindPlane());
+                    REQUIRE(result.tp_dirs[4] == true);
+                    REQUIRE_THAT(result.ents[5].GetCenter().DistToSqr(pp.blue.pos), Catch::Matchers::WithinAbs(0, .5f));
+                    REQUIRE(result.ulp_diffs_from_portal_plane[5].ax == 0);
+                    REQUIRE_FALSE(result.ulp_diffs_from_portal_plane[5].PtWasBehindPlane());
                     [[fallthrough]];
                 case 4:
-                    REQUIRE(chain.tp_dirs[3] == true);
-                    REQUIRE(chain.tps_queued[4] == 1);
-                    REQUIRE_THAT(chain.pts[4].DistToSqr(pp.orange.pos), Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE(chain.ulp_diffs[4].PtWasBehindPlane());
+                    REQUIRE(result.tp_dirs[3] == true);
+                    REQUIRE_THAT(result.ents[4].GetCenter().DistToSqr(pp.orange.pos),
+                                 Catch::Matchers::WithinAbs(0, .5f));
+                    REQUIRE(result.ulp_diffs_from_portal_plane[4].PtWasBehindPlane());
                     [[fallthrough]];
                 case 3:
-                    REQUIRE(chain.tp_dirs[2] == false);
-                    REQUIRE(chain.tps_queued[3] == 0);
-                    REQUIRE_THAT(chain.pts[3].DistToSqr(target_vag_pos), Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE_FALSE(chain.ulp_diffs[3].Valid());
+                    REQUIRE(result.tp_dirs[2] == false);
+                    REQUIRE_THAT(result.ents[3].GetCenter().DistToSqr(target_vag_pos),
+                                 Catch::Matchers::WithinAbs(0, .5f));
+                    REQUIRE_FALSE(result.ulp_diffs_from_portal_plane[3].Valid());
                     [[fallthrough]];
                 case 2:
-                    REQUIRE(chain.tp_dirs[1] == false);
-                    REQUIRE(chain.tps_queued[2] == 1);
-                    REQUIRE_THAT(chain.pts[2].DistToSqr(pp.orange.pos), Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE(chain.ulp_diffs[2].ax == 0);
-                    REQUIRE(chain.ulp_diffs[2].PtWasBehindPlane());
+                    REQUIRE(result.tp_dirs[1] == false);
+                    REQUIRE_THAT(result.ents[2].GetCenter().DistToSqr(pp.orange.pos),
+                                 Catch::Matchers::WithinAbs(0, .5f));
+                    REQUIRE(result.ulp_diffs_from_portal_plane[2].ax == 0);
+                    REQUIRE(result.ulp_diffs_from_portal_plane[2].PtWasBehindPlane());
                     [[fallthrough]];
                 case 1:
-                    REQUIRE(chain.tp_dirs[0] == true);
-                    REQUIRE(chain.tps_queued[1] == -2);
-                    REQUIRE_THAT(chain.pts[1].DistToSqr(pp.blue.pos), Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE(chain.ulp_diffs[1].ax == 0);
-                    REQUIRE(chain.ulp_diffs[1].PtWasBehindPlane());
+                    REQUIRE(result.tp_dirs[0] == true);
+                    REQUIRE_THAT(result.ents[1].GetCenter().DistToSqr(pp.blue.pos), Catch::Matchers::WithinAbs(0, .5f));
+                    REQUIRE(result.ulp_diffs_from_portal_plane[1].ax == 0);
+                    REQUIRE(result.ulp_diffs_from_portal_plane[1].PtWasBehindPlane());
                     [[fallthrough]];
                 case 0:
-                    REQUIRE(chain.tps_queued[0] == 1);
-                    REQUIRE_THAT(chain.pts[0].DistToSqr(pp.orange.pos), Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE(chain.ulp_diffs[0].ax == 0);
-                    REQUIRE(chain.ulp_diffs[0].PtWasBehindPlane());
+                    REQUIRE_THAT(result.ents[0].GetCenter().DistToSqr(pp.orange.pos),
+                                 Catch::Matchers::WithinAbs(0, .5f));
+                    REQUIRE(result.ulp_diffs_from_portal_plane[0].ax == 0);
+                    REQUIRE(result.ulp_diffs_from_portal_plane[0].PtWasBehindPlane());
                     break;
                 default:
                     FAIL();
@@ -529,17 +456,121 @@ TEST_CASE("Finite teleport chain results in free edicts")
         QAngle{0.f, 0.f, 0.f},
     };
     pp.CalcTpMatrices(PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED);
-    Entity player = Entity::CreatePlayerFromCenter(Vector{-127.96876f, -191.24300f, 182.03125f}, true);
-    EntityInfo ent_info{
-        .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-        .origin_inbounds = false,
+
+    TeleportChainParams params{
+        &pp,
+        Entity::CreatePlayerFromCenter(Vector{-127.96876f, -191.24300f, 182.03125f}, true),
     };
-    TeleportChain chain;
-    chain.Generate(pp, false, player, ent_info, 200);
-    REQUIRE_FALSE(chain.max_tps_exceeded);
-    REQUIRE(chain.tp_dirs.size() == 82);
-    REQUIRE(chain.cum_primary_tps == 0);
-    REQUIRE(chain.ulp_diffs.back().PtWasBehindPlane());
+    params.nudge_to_first_portal_plane = true;
+    params.n_max_teleports = 200;
+    params.record_flags = TCRF_RECORD_ALL;
+    TeleportChainResult result;
+
+    GenerateTeleportChain(params, result);
+
+    REQUIRE(result.total_n_teleports == 82);
+    REQUIRE(result.cum_teleports == 0);
+    REQUIRE_FALSE(result.first_ulp_nudge_exceed);
+    REQUIRE_FALSE(result.max_tps_exceeded);
+    REQUIRE(result.tp_dirs.size() == 82);
+    REQUIRE(result.ulp_diffs_from_portal_plane.size() == 83);
+    REQUIRE(result.ulp_diffs_from_portal_plane.back().PtWasBehindPlane());
+}
+
+TEST_CASE("19 Lochness")
+{
+    PortalPair pp{
+        Vector{-416.247498f, 735.368835f, 255.96875f},
+        QAngle{90.f, -90.2385559f, 0.f},
+        Vector{-394.776428f, -56.0312462f, 38.8377686f},
+        QAngle{-44.9994202f, 180.f, 0.f},
+    };
+    pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
+
+    TeleportChainParams params{
+        &pp,
+        Entity::CreatePlayerFromOrigin(Vector{-416.247498f, 735.368835f, 219.97f}, false),
+    };
+
+    TeleportChainResult result;
+    GenerateTeleportChain(params, result);
+
+    Entity roughExpectedEnt = Entity::CreatePlayerFromOrigin(Vector{398.634583f, 599.235168f, 400.928467f}, true);
+
+    REQUIRE(result.total_n_teleports == 3);
+    REQUIRE(result.cum_teleports == -1);
+    REQUIRE_FALSE(result.max_tps_exceeded);
+    REQUIRE_FALSE(result.first_ulp_nudge_exceed);
+    REQUIRE(result.ent.is_player);
+    REQUIRE(result.ent.player.crouched);
+    REQUIRE_THAT(std::sqrtf(result.ent.GetCenter().DistToSqr(roughExpectedEnt.GetCenter())),
+                 Catch::Matchers::WithinAbs(0, .01f));
+}
+
+TEST_CASE("E01 AAG")
+{
+    PortalPair pp{
+        Vector{-141.904663f, 730.353394f, -191.417892f},
+        QAngle{15.9453955f, 180.f, 0.f},
+        Vector{-233.054321f, 652.257446f, -255.96875f},
+        QAngle{-90.f, 155.909348f, 0.f},
+    };
+    pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
+
+    TeleportChainParams params{
+        &pp,
+        Entity::CreatePlayerFromOrigin(Vector{-136.239883, 726.482483, -240.416977}, false),
+    };
+
+    TeleportChainResult result;
+    GenerateTeleportChain(params, result);
+
+    Entity roughExpectedEnt = Entity::CreatePlayerFromOrigin(Vector{-93.691399f, 636.419739f, -166.272324f}, true);
+
+    REQUIRE(result.total_n_teleports == 3);
+    REQUIRE(result.cum_teleports == -1);
+    REQUIRE_FALSE(result.max_tps_exceeded);
+    REQUIRE_FALSE(result.first_ulp_nudge_exceed);
+    REQUIRE(result.ent.is_player);
+    REQUIRE(result.ent.player.crouched);
+    REQUIRE_THAT(std::sqrtf(result.ent.GetCenter().DistToSqr(roughExpectedEnt.GetCenter())),
+                 Catch::Matchers::WithinAbs(0, 2.f));
+}
+
+TEST_CASE("00 AAG")
+{
+    /*
+    * The bottom half of the diagonal surface in the 00 button room has a fucked up normal which
+    * causes an AAG. This is very similar to why the PPNF (Portal Placement Never Fail) category
+    * can abuse a lot of AAGs in random places - for some reason static prop normals are often
+    * messed up in the same way.
+    */
+    PortalPair pp{
+        Vector{-474.710541f, -1082.65906f, 182.03125f},
+        QAngle{0.00538991531f, 135.f, 0.f},
+        Vector{-735.139282f, -923.540344f, 128.03125f},
+        QAngle{-90.f, 55.0390396f, 0.f},
+    };
+    pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
+
+    TeleportChainParams params{
+        &pp,
+        Entity::CreatePlayerFromOrigin(Vector{-473.604370f, -1082.235498f, 128.031250f}, false),
+    };
+
+    TeleportChainResult result;
+    GenerateTeleportChain(params, result);
+
+    Entity roughExpectedEnt = Entity::CreatePlayerFromOrigin(Vector{-629.746887f, -1311.233398f, 138.827957f}, true);
+
+    REQUIRE(result.total_n_teleports == 3);
+    REQUIRE(result.cum_teleports == -1);
+    REQUIRE_FALSE(result.max_tps_exceeded);
+    REQUIRE_FALSE(result.first_ulp_nudge_exceed);
+    REQUIRE(result.ent.is_player);
+    REQUIRE(result.ent.player.crouched);
+    REQUIRE_THAT(std::sqrtf(result.ent.GetCenter().DistToSqr(roughExpectedEnt.GetCenter())),
+                 Catch::Matchers::WithinAbs(0, 2.f));
 }
 
 /*
@@ -650,7 +681,8 @@ TEST_CASE("SPT with IPC")
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
 
     small_prng rng;
-    TeleportChain chain;
+    TeleportChainParams params;
+    TeleportChainResult result;
 
     int iteration = 0;
     while (iteration < 1000) {
@@ -671,16 +703,17 @@ TEST_CASE("SPT with IPC")
             continue; // don't use portals where the nudges might take a really long time
 
         PortalPair pp{blue, orange};
-
         pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
-        Entity player = Entity::CreatePlayerFromCenter(blue.pos, true);
-        EntityInfo ent_info{
-            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .origin_inbounds = false,
-        };
-        chain.Generate(pp, true, player, ent_info, 3);
+
+        params.pp = &pp;
+        params.ent = Entity::CreatePlayerFromCenter(blue.pos, true);
+        params.n_max_teleports = 3;
+        params.nudge_to_first_portal_plane = true;
+
+        GenerateTeleportChain(params, result);
+
         // only handle basic teleports and simple VAGs for now
-        if (chain.max_tps_exceeded || (chain.cum_primary_tps != 1 && chain.cum_primary_tps != -1))
+        if (result.max_tps_exceeded || (result.cum_teleports != 1 && result.cum_teleports != -1))
             continue;
 
         /*
@@ -712,7 +745,7 @@ TEST_CASE("SPT with IPC")
         );
         // clang-format on
         conn.RecvAck();
-        conn.SendCmd("%s", chain.pre_teleported_ent.GetSetPosCmd().c_str());
+        conn.SendCmd("%s", result.ents[0].GetSetPosCmd().c_str());
         conn.RecvAck();
 
         // timescale 1: sleep for 350ms, timescale 20: sleep for 10ms
@@ -734,10 +767,9 @@ TEST_CASE("SPT with IPC")
         REQUIRE(n_args == 3);
 
         INFO("iteration " << iteration);
-        INFO("expected " << (chain.cum_primary_tps == CUM_TP_VAG ? "VAG" : "normal teleport"));
-        Entity expected_player_pos = chain.transformed_ent;
-        REQUIRE(actual_player_pos.DistToSqr(expected_player_pos.player.origin) < 100 * 100);
-        printf("iteration %d: %s", iteration, chain.cum_primary_tps == CUM_TP_VAG ? "VAG\n" : "Normal teleport\n");
+        INFO("expected " << (result.cum_teleports == -1 ? "VAG" : "normal teleport"));
+        REQUIRE(actual_player_pos.DistToSqr(result.ent.player.origin) < 100 * 100);
+        printf("iteration %d: %s", iteration, result.cum_teleports == -1 ? "VAG\n" : "Normal teleport\n");
         iteration++;
     }
 }

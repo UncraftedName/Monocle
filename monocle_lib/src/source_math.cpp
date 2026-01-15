@@ -78,16 +78,16 @@ bool Portal::ShouldTeleport(const Entity& ent, bool check_portal_hole) const
     * hole mesh, but I only care about high precision on the portal boundary. For portal hole
     * checks, I assume the entity is a player or a ball.
     */
-    if (ent.isPlayer) {
+    if (ent.is_player) {
         Vector world_mins = ent.GetWorldMins();
         Vector world_maxs = ent.GetWorldMaxs();
         for (int i = 0; i < 6; i++)
             if (BoxOnPlaneSide(world_mins, world_maxs, hole_planes[i], hole_planes_bits[i]) == PSR_FRONT)
                 return false;
     } else {
-        assert(("entities that are too small will fail portal hole check", ent.nonPlayer.radius >= 1.f));
+        assert(("entities that are too small will fail portal hole check", ent.ball.radius >= 1.f));
         for (int i = 0; i < 6; i++)
-            if (BallOnPlaneSide(ent.nonPlayer.center, ent.nonPlayer.radius, hole_planes[i]) == PSR_FRONT)
+            if (BallOnPlaneSide(ent.ball.center, ent.ball.radius, hole_planes[i]) == PSR_FRONT)
                 return false;
     }
     return true;
@@ -152,7 +152,7 @@ Entity PortalPair::Teleport(const Entity& ent, bool tp_from_blue) const
     const Vector& oldPlayerOrigin = ent.player.origin;
     bool playerCrouched = ent.player.crouched;
 
-    if (ent.isPlayer) {
+    if (ent.is_player) {
         const Portal& p = tp_from_blue ? blue : orange;
         const Portal& op = tp_from_blue ? orange : blue;
 
@@ -169,9 +169,9 @@ Entity PortalPair::Teleport(const Entity& ent, bool tp_from_blue) const
 
     Vector newCenter;
     VMatrix__operatorVec(tp_from_blue ? &b_to_o : &o_to_b, &newCenter, &oldCenter);
-    if (ent.isPlayer)
+    if (ent.is_player)
         return Entity::CreatePlayerFromOrigin(newCenter + (oldPlayerOrigin - oldCenter), playerCrouched);
-    return Entity::CreateBall(newCenter, ent.nonPlayer.radius);
+    return Entity::CreateBall(newCenter, ent.ball.radius);
 }
 
 Vector PortalPair::Teleport(const Vector& pt, bool tp_from_blue) const
@@ -251,8 +251,62 @@ int BallOnPlaneSide(const Vector& c, float r, const VPlane& p)
     return PSR_ON;
 }
 
+Entity Entity::CreatePlayerFromOrigin(Vector origin, bool crouched)
+{
+    Entity ent;
+    ent.is_player = true;
+    ent.player.origin = origin;
+    ent.player.crouched = crouched;
+    ent.n_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN;
+    return ent;
+}
+
+Entity Entity::CreatePlayerFromCenter(Vector center, bool crouched)
+{
+    return CreatePlayerFromOrigin(center - (crouched ? PLAYER_CROUCH_HALF : PLAYER_STAND_HALF), crouched);
+}
+
+Entity Entity::CreateBall(Vector center, float radius)
+{
+    Entity ent;
+    ent.is_player = false;
+    ent.ball.center = center;
+    ent.ball.radius = radius;
+    ent.n_children = 0;
+    return ent;
+}
+
+Vector Entity::GetWorldMins() const
+{
+    if (is_player)
+        return player.origin + (player.crouched ? PLAYER_CROUCH_MINS : PLAYER_STAND_MINS);
+    return ball.center + Vector(ball.radius);
+}
+
+Vector Entity::GetWorldMaxs() const
+{
+    if (is_player)
+        return player.origin + (player.crouched ? PLAYER_CROUCH_MAXS : PLAYER_STAND_MAXS);
+    return ball.center + Vector(ball.radius);
+}
+
+Vector Entity::GetCenter() const
+{
+    if (is_player)
+        return player.origin + (player.crouched ? PLAYER_CROUCH_HALF : PLAYER_STAND_HALF);
+    return ball.center;
+}
+
+bool Entity::operator==(const Entity& other) const
+{
+    return is_player == other.is_player && n_children == other.n_children &&
+           (is_player
+                ? (std::tie(player.crouched, player.origin) == std::tie(other.player.crouched, other.player.origin))
+                : (std::tie(ball.center, ball.radius) == std::tie(other.ball.center, other.ball.radius)));
+}
+
 std::string Entity::GetSetPosCmd() const
 {
-    assert(isPlayer);
+    assert(is_player);
     return std::format("setpos {:.9g} {:.9g} {:.9g}", player.origin.x, player.origin.y, player.origin.z);
 }

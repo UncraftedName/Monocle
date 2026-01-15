@@ -3,12 +3,13 @@
 #include <stdarg.h>
 #include <vector>
 #include <fstream>
+#include <format>
 
 #include "vag_logic.hpp"
 
-Entity NudgeEntityBehindPortalPlane(const Entity& ent, const Portal& portal, VecUlpDiff* ulp_diff)
+std::pair<Entity, VecUlpDiff> NudgeEntityBehindPortalPlane(const Entity& ent, const Portal& portal, size_t n_max_nudges)
 {
-    int nudge_axis;
+    int nudge_axis = 0;
     float biggest = -INFINITY;
     for (int i = 0; i < 3; i++) {
         if (fabsf(portal.plane.n[i]) > biggest) {
@@ -16,263 +17,359 @@ Entity NudgeEntityBehindPortalPlane(const Entity& ent, const Portal& portal, Vec
             nudge_axis = i;
         }
     }
-    VecUlpDiff tmp_diff{};
-    VecUlpDiff* diff = ulp_diff ? ulp_diff : &tmp_diff;
-    diff->Reset();
+    VecUlpDiff ulp_diff{};
 
-    Entity new_ent = ent;
+    Entity nudged_ent = ent;
 
     for (int i = 0; i < 2; i++) {
-        Vector& ent_pos = new_ent.GetPosRef();
+        Vector& ent_pos = nudged_ent.GetPosRef();
         float nudge_towards = ent_pos[nudge_axis] + portal.plane.n[nudge_axis] * (i ? -10000.f : 10000.f);
         int ulp_diff_incr = i ? -1 : 1;
-        constexpr int nudge_limit = 10000000;
-        int n_nudges = 0;
+        size_t n_nudges = 0;
 
-        while (portal.ShouldTeleport(new_ent, false) != (bool)i && n_nudges++ < nudge_limit) {
+        while (portal.ShouldTeleport(nudged_ent, false) != (bool)i && n_nudges++ < n_max_nudges) {
             ent_pos[nudge_axis] = std::nextafterf(ent_pos[nudge_axis], nudge_towards);
-            diff->Update(nudge_axis, ulp_diff_incr);
+            ulp_diff.Update(nudge_axis, ulp_diff_incr);
         }
 
         // prevent infinite loop
-        if (n_nudges >= nudge_limit) {
-            assert(0);
-            diff->SetInvalid();
-            return ent;
+        if (n_nudges >= n_max_nudges) {
+            ulp_diff.diff_overflow = 1;
+            return {nudged_ent, ulp_diff};
         }
     }
-    return new_ent;
+    return {nudged_ent, ulp_diff};
 }
 
-void TeleportChain::Clear()
+using CHAIN_DEFS = TeleportChainParams::InternalStateDefs;
+
+struct TeleportChainParams::InternalState {
+    /*
+    * CPortalTouchScope::m_CallQueue. Holds values representing:
+    * - FUNC_TP_BLUE: a blue teleport
+    * - FUNC_TP_ORANGE: an orange teleport
+    * - FUNC_RECHECK_COLLISION: RecheckEntityCollision
+    * - negative values: a null
+    */
+    CHAIN_DEFS::queue_type tp_queue;
+    // total number of nulls queued so far, only for debugging
+    CHAIN_DEFS::queue_entry n_queued_nulls;
+    int touch_scope_depth; // CPortalTouchScope::m_nDepth, not fully implemented
+
+    CHAIN_DEFS::portal_type owning_portal;
+};
+
+TeleportChainParams::TeleportChainParams(const PortalPair* pp, Entity ent)
+    : pp(pp),
+      ent(ent),
+      first_tp_from_blue(pp ? (pp->blue.plane.DistTo(ent.GetCenter()) < pp->orange.plane.DistTo(ent.GetCenter()))
+                            : true)
+{}
+
+TeleportChainParams::~TeleportChainParams() {}
+
+/*
+* This is a simplified replicate of the game's logic for teleporting stuff. The source is in e.g.
+* - CProp_Portal::ShouldTeleportTouchingEntity
+* - CProp_Portal::TeleportTouchingEntity
+* - CProp_Portal::Touch
+* etc.
+* 
+* Most of the functions are templated here for debugging - the call stack will have e.g.
+* GenerateTeleportChainImpl::TeleportEntity<1>           // blue portal
+* GenerateTeleportChainImpl::ReleaseOwnershipOfEntity<2> // orange portal
+*/
+struct GenerateTeleportChainImpl {
+
+    const TeleportChainParams& usrParams;
+    TeleportChainParams::InternalState& st;
+    TeleportChainResult& result;
+
+    GenerateTeleportChainImpl(const TeleportChainParams& params, TeleportChainResult& result)
+        : usrParams(params),
+          st(params._st ? *params._st : *(params._st = std::make_unique<TeleportChainParams::InternalState>())),
+          result(result)
+    {}
+
+    void ResetState()
+    {
+        // clear internal state
+
+        st.tp_queue.clear();
+        st.n_queued_nulls = 0;
+        st.touch_scope_depth = 0;
+        st.owning_portal = usrParams.first_tp_from_blue ? CHAIN_DEFS::FUNC_TP_BLUE : CHAIN_DEFS::FUNC_TP_ORANGE;
+
+        // clear result
+
+        result.max_tps_exceeded = false;
+        result.first_ulp_nudge_exceed = false;
+        result.total_n_teleports = 0;
+        result.cum_teleports = 0;
+        result.ent = usrParams.ent;
+        result.ents.clear();
+        result.ulp_diffs_from_portal_plane.clear();
+        result.tp_dirs.clear();
+    }
+
+    template <CHAIN_DEFS::portal_type PORTAL>
+    static constexpr CHAIN_DEFS::portal_type OppositePortalType()
+    {
+        if constexpr (PORTAL == CHAIN_DEFS::FUNC_TP_BLUE)
+            return CHAIN_DEFS::FUNC_TP_ORANGE;
+        else
+            return CHAIN_DEFS::FUNC_TP_BLUE;
+    }
+
+    template <CHAIN_DEFS::portal_type PORTAL>
+    inline bool PortalIsPrimary()
+    {
+        return usrParams.first_tp_from_blue == (PORTAL == CHAIN_DEFS::FUNC_TP_BLUE);
+    }
+
+    template <CHAIN_DEFS::portal_type PORTAL>
+    inline const Portal& GetPortal()
+    {
+        return PORTAL == CHAIN_DEFS::FUNC_TP_BLUE ? usrParams.pp->blue : usrParams.pp->orange;
+    }
+
+    void CallQueued()
+    {
+        if (result.max_tps_exceeded)
+            return;
+
+        st.tp_queue.push_back(-++st.n_queued_nulls);
+
+        if (result.dg) {
+            result.dg->PushCallQueuedNode(st.tp_queue);
+            result.dg->SetLastTeleportCallQueuedTeleport(false);
+        }
+
+        for (bool dequeued_null = false; !dequeued_null && !result.max_tps_exceeded;) {
+            int val = st.tp_queue.front();
+            st.tp_queue.pop_front();
+            switch (val) {
+                case CHAIN_DEFS::FUNC_RECHECK_COLLISION:
+                    break;
+                case CHAIN_DEFS::FUNC_TP_BLUE:
+                    TeleportEntity<CHAIN_DEFS::FUNC_TP_BLUE>();
+                    break;
+                case CHAIN_DEFS::FUNC_TP_ORANGE:
+                    TeleportEntity<CHAIN_DEFS::FUNC_TP_ORANGE>();
+                    break;
+                default:
+                    assert(val < 0);
+                    dequeued_null = true;
+                    break;
+            }
+        }
+        if (result.dg)
+            result.dg->PopNode();
+    }
+
+    template <CHAIN_DEFS::portal_type PORTAL>
+    void ReleaseOwnershipOfEntity(bool moving_to_linked)
+    {
+        if (PORTAL != st.owning_portal)
+            return;
+        st.owning_portal = CHAIN_DEFS::PORTAL_NONE;
+        if (st.touch_scope_depth > 0)
+            for (int i = 0; i < result.ent.n_children + !moving_to_linked; i++)
+                st.tp_queue.push_back(CHAIN_DEFS::FUNC_RECHECK_COLLISION);
+    }
+
+    template <CHAIN_DEFS::portal_type PORTAL>
+    bool SharedEnvironmentCheck()
+    {
+        if (st.owning_portal == CHAIN_DEFS::PORTAL_NONE || st.owning_portal == PORTAL)
+            return true;
+        Vector ent_center = result.ent.GetCenter();
+        return ent_center.DistToSqr(GetPortal<PORTAL>().pos) <
+               ent_center.DistToSqr(GetPortal<OppositePortalType<PORTAL>()>().pos);
+    }
+
+    template <CHAIN_DEFS::portal_type PORTAL>
+    void PortalTouchEntity()
+    {
+        if (result.max_tps_exceeded)
+            return;
+        ++st.touch_scope_depth;
+        if (st.owning_portal != PORTAL) {
+            if (SharedEnvironmentCheck<PORTAL>()) {
+                bool ent_in_front =
+                    GetPortal<PORTAL>().plane.n.Dot(result.ent.GetCenter()) > GetPortal<PORTAL>().plane.d;
+                bool player_stuck = result.ent.is_player ? !usrParams.map_origin_inbounds : false;
+                if (ent_in_front || player_stuck) {
+                    if (st.owning_portal != PORTAL && st.owning_portal != CHAIN_DEFS::PORTAL_NONE)
+                        ReleaseOwnershipOfEntity<OppositePortalType<PORTAL>()>(false);
+                    st.owning_portal = PORTAL;
+                }
+            }
+        }
+        if (GetPortal<PORTAL>().ShouldTeleport(result.ent, true))
+            TeleportEntity<PORTAL>();
+        if (--st.touch_scope_depth == 0)
+            CallQueued();
+    }
+
+    void EntityTouchPortal()
+    {
+        if (st.touch_scope_depth == 0)
+            CallQueued();
+    }
+
+    template <CHAIN_DEFS::portal_type PORTAL>
+    void TeleportEntity()
+    {
+        if (st.touch_scope_depth > 0) {
+            st.tp_queue.push_back(PORTAL);
+            if (result.dg)
+                result.dg->SetLastTeleportCallQueuedTeleport(true);
+            return;
+        }
+
+        if (result.total_n_teleports >= usrParams.n_max_teleports) {
+            result.max_tps_exceeded = true;
+            if (result.dg)
+                result.dg->PushExceededTpNode(PORTAL == CHAIN_DEFS::FUNC_TP_BLUE);
+            return;
+        }
+
+        ++result.total_n_teleports;
+
+        result.cum_teleports += PortalIsPrimary<PORTAL>() ? 1 : -1;
+        result.ent = usrParams.pp->Teleport(result.ent, PORTAL == CHAIN_DEFS::FUNC_TP_BLUE);
+        if (usrParams.record_flags & TCRF_RECORD_ENTITY)
+            result.ents.push_back(result.ent);
+        if (usrParams.record_flags & TCRF_RECORD_TP_DIRS)
+            result.tp_dirs.push_back(PortalIsPrimary<PORTAL>());
+
+        int dgPlaneSide = 0;
+
+        if (usrParams.record_flags & TCRF_RECORD_ULP_DIFFS) {
+            VecUlpDiff ulp_diff{};
+            if (result.cum_teleports == 0 || result.cum_teleports == 1) {
+                auto& p_ulp_diff_from = (result.cum_teleports == 0) == usrParams.first_tp_from_blue
+                                          ? usrParams.pp->blue
+                                          : usrParams.pp->orange;
+                auto [_, ud] = NudgeEntityBehindPortalPlane(result.ent, p_ulp_diff_from);
+                ulp_diff = ud;
+                if (ulp_diff.Valid())
+                    dgPlaneSide = ulp_diff.PtWasBehindPlane() ? -1 : 1;
+            } else {
+                ulp_diff.SetInvalid();
+            }
+            result.ulp_diffs_from_portal_plane.push_back(ulp_diff);
+        }
+
+        if (result.dg)
+            result.dg->PushTeleportNode(PORTAL == CHAIN_DEFS::FUNC_TP_BLUE, result.cum_teleports, dgPlaneSide);
+
+        ReleaseOwnershipOfEntity<PORTAL>(true);
+        st.owning_portal = OppositePortalType<PORTAL>();
+
+        // do the 4 touch calls
+        for (int i = 0; i < 4; i++) {
+            if (result.dg)
+                result.dg->SetTouchCallIndex(i);
+            if (i == 0 || i == 3)
+                EntityTouchPortal();
+            else
+                PortalTouchEntity<OppositePortalType<PORTAL>()>();
+        }
+
+        if (result.dg)
+            result.dg->PopNode();
+    }
+};
+
+void GenerateTeleportChain(const TeleportChainParams& params, TeleportChainResult& result)
 {
-    pts.clear();
-    ulp_diffs.clear();
-    tp_dirs.clear();
-    tps_queued.clear();
-    cum_primary_tps = 0;
-    max_tps_exceeded = false;
-    tp_queue.clear();
-    cum_primary_tps = 0;
-    max_tps_exceeded = 0;
-    n_queued_nulls = 0;
-    touch_scope_depth = 0;
+    assert(!!params.pp);
+
+    GenerateTeleportChainImpl impl{params, result};
+    impl.ResetState();
+
+    if (result.dg)
+        result.dg->ResetAndPushRootNode(params.first_tp_from_blue);
+
+    if ((params.record_flags & TCRF_RECORD_ULP_DIFFS) || params.nudge_to_first_portal_plane) {
+        auto [nudged_ent, ulp_diff] =
+            NudgeEntityBehindPortalPlane(result.ent,
+                                         params.first_tp_from_blue ? params.pp->blue : params.pp->orange,
+                                         params.n_max_ulp_nudges);
+        if (params.nudge_to_first_portal_plane) {
+            if (ulp_diff.diff_overflow) {
+                result.first_ulp_nudge_exceed = true;
+                if (result.dg)
+                    result.dg->Finish();
+                return;
+            }
+            result.ent = nudged_ent;
+        }
+        if (params.record_flags & TCRF_RECORD_ULP_DIFFS)
+            result.ulp_diffs_from_portal_plane.push_back(ulp_diff);
+    }
+
+    if (params.record_flags & TCRF_RECORD_ENTITY)
+        result.ents.push_back(result.ent);
+
+    if (params.first_tp_from_blue)
+        impl.PortalTouchEntity<CHAIN_DEFS::FUNC_TP_BLUE>();
+    else
+        impl.PortalTouchEntity<CHAIN_DEFS::FUNC_TP_ORANGE>();
+
+    if (result.dg)
+        result.dg->Finish();
 }
 
-void TeleportChain::DebugPrintTeleports() const
+std::string TeleportChainResult::CreateDebugString(const TeleportChainParams& params) const
 {
+    if (!(params.record_flags & (TCRF_RECORD_TP_DIRS | TCRF_RECORD_ENTITY)))
+        return std::string(__FUNCTION__) + ": TCRF_RECORD_TP_DIRS | TCRF_RECORD_ENTITY is required";
+
+    std::string out;
+
     int min_cum = 0, max_cum = 0, cum = 0;
     for (bool dir : tp_dirs) {
         cum += dir ? 1 : -1;
         min_cum = cum < min_cum ? cum : min_cum;
         max_cum = cum > max_cum ? cum : max_cum;
     }
-    int left_pad = pts.size() <= 1 ? 1 : (int)floor(log10(pts.size() - 1)) + 1;
+    int left_pad = ents.size() <= 1 ? 1 : (int)std::floor(std::log10(ents.size() - 1)) + 1;
     cum = 0;
     for (size_t i = 0; i <= tp_dirs.size(); i++) {
-        printf("%.*u) ", left_pad, i);
+        std::format_to(std::back_inserter(out), "{:{}d}) ", i, left_pad);
         for (int c = min_cum; c <= max_cum; c++) {
-            VecUlpDiff diff = ulp_diffs[i];
+
+            bool should_teleport = false;
+            if (c == 0 || c == 1) {
+                const Portal& p = params.first_tp_from_blue == !!c ? params.pp->orange : params.pp->blue;
+                should_teleport = p.ShouldTeleport(ents[i], false);
+            }
+
             if (c == cum) {
                 if (c == 0)
-                    printf((i == 0 || diff.PtWasBehindPlane()) ? "0|>" : ".|0");
+                    out += should_teleport ? "0|>" : ".|0";
                 else if (c == 1)
-                    printf(diff.PtWasBehindPlane() ? "<|1" : "1|.");
+                    out += should_teleport ? "<|1" : "1|.";
                 else if (c < 0)
-                    printf("%d.", c);
+                    std::format_to(std::back_inserter(out), "{}.", c);
                 else
-                    printf(".%d.", c);
+                    std::format_to(std::back_inserter(out), ".{}.", c);
             } else {
                 if (c == 0)
-                    printf(".|>");
+                    out += ".|>";
                 else if (c == 1)
-                    printf("<|.");
+                    out += "<|.";
                 else
-                    printf("...");
+                    out += "...";
             }
         }
-        putc('\n', stdout);
+        out += '\n';
         if (i < tp_dirs.size())
             cum += tp_dirs[i] ? 1 : -1;
     }
-}
 
-void TeleportChain::Generate(const PortalPair& pair,
-                             bool tp_from_blue,
-                             const Entity& ent,
-                             const EntityInfo& ent_info,
-                             size_t n_max_teleports,
-                             bool output_graphviz)
-{
-    Clear();
-
-    pp = &pair;
-    this->ent_info = ent_info;
-    max_tps = n_max_teleports;
-    blue_primary = tp_from_blue;
-    owning_portal = tp_from_blue ? FUNC_TP_BLUE : FUNC_TP_ORANGE;
-
-    // TODO change to param
-    DotGen dotGen;
-    if (output_graphviz)
-        dg = &dotGen;
-
-    if (dg)
-        dg->PushRootNode(tp_from_blue);
-
-    // assume we're teleporting from the portal boundary
-    ulp_diffs.emplace_back();
-    transformed_ent = NudgeEntityBehindPortalPlane(ent, tp_from_blue ? pair.blue : pair.orange, &ulp_diffs.back());
-    pre_teleported_ent = transformed_ent;
-    pts.push_back(ent.GetCenter());
-    tps_queued.push_back(0);
-
-    if (tp_from_blue)
-        PortalTouchEntity<FUNC_TP_BLUE>();
-    else
-        PortalTouchEntity<FUNC_TP_ORANGE>();
-    assert(max_tps_exceeded || tp_queue.empty());
-    assert(touch_scope_depth == 0);
-
-    if (dg) {
-        dg->Finish();
-        std::ofstream("chain.dot") << dg->buf;
-        dg = nullptr;
-    }
-}
-
-void TeleportChain::CallQueued()
-{
-    if (max_tps_exceeded)
-        return;
-
-    tp_queue.push_back(-++n_queued_nulls);
-
-    if (dg)
-        dg->PushCallQueuedNode(last_should_tp, tp_queue, cur_touch_call_idx);
-    last_should_tp = false;
-
-    for (bool dequeued_null = false; !dequeued_null && !max_tps_exceeded;) {
-        int val = tp_queue.front();
-        tp_queue.pop_front();
-        switch (val) {
-            case FUNC_RECHECK_COLLISION:
-                break;
-            case FUNC_TP_BLUE:
-                TeleportEntity<FUNC_TP_BLUE>();
-                break;
-            case FUNC_TP_ORANGE:
-                TeleportEntity<FUNC_TP_ORANGE>();
-                break;
-            default:
-                assert(val < 0);
-                dequeued_null = true;
-                break;
-        }
-    }
-    if (dg)
-        dg->PopNode();
-}
-
-template <TeleportChain::portal_type PORTAL>
-void TeleportChain::ReleaseOwnershipOfEntity(bool moving_to_linked)
-{
-    if (PORTAL != owning_portal)
-        return;
-    owning_portal = PORTAL_NONE;
-    if (touch_scope_depth > 0)
-        for (int i = 0; i < ent_info.n_ent_children + !moving_to_linked; i++)
-            tp_queue.push_back(FUNC_RECHECK_COLLISION);
-}
-
-template <TeleportChain::portal_type PORTAL>
-bool TeleportChain::SharedEnvironmentCheck()
-{
-    if (owning_portal == PORTAL_NONE || owning_portal == PORTAL)
-        return true;
-    Vector ent_center = transformed_ent.GetCenter();
-    return ent_center.DistToSqr(GetPortal<PORTAL>().pos) <
-           ent_center.DistToSqr(GetPortal<OppositePortalType<PORTAL>()>().pos);
-}
-
-template <TeleportChain::portal_type PORTAL>
-void TeleportChain::PortalTouchEntity()
-{
-    if (max_tps_exceeded)
-        return;
-    ++touch_scope_depth;
-    if (owning_portal != PORTAL) {
-        if (SharedEnvironmentCheck<PORTAL>()) {
-            bool ent_in_front =
-                GetPortal<PORTAL>().plane.n.Dot(transformed_ent.GetCenter()) > GetPortal<PORTAL>().plane.d;
-            bool player_stuck = transformed_ent.isPlayer ? !ent_info.origin_inbounds : false;
-            if (ent_in_front || player_stuck) {
-                if (owning_portal != PORTAL && owning_portal != PORTAL_NONE)
-                    ReleaseOwnershipOfEntity<OppositePortalType<PORTAL>()>(false);
-                owning_portal = PORTAL;
-            }
-        }
-    }
-    if (GetPortal<PORTAL>().ShouldTeleport(transformed_ent, true))
-        TeleportEntity<PORTAL>();
-    if (--touch_scope_depth == 0)
-        CallQueued();
-}
-
-void TeleportChain::EntityTouchPortal()
-{
-    if (touch_scope_depth == 0)
-        CallQueued();
-}
-
-template <TeleportChain::portal_type PORTAL>
-void TeleportChain::TeleportEntity()
-{
-    if (touch_scope_depth > 0) {
-        tps_queued.back() += PortalIsPrimary<PORTAL>() ? 1 : -1;
-        tp_queue.push_back(PORTAL);
-        last_should_tp = true;
-        return;
-    }
-
-    if (tp_dirs.size() >= max_tps) {
-        max_tps_exceeded = true;
-        if (dg)
-            dg->PushExceededTpNode(PORTAL == FUNC_TP_BLUE);
-        return;
-    }
-
-    tp_dirs.push_back(PortalIsPrimary<PORTAL>());
-    cum_primary_tps += PortalIsPrimary<PORTAL>() ? 1 : -1;
-    transformed_ent = pp->Teleport(transformed_ent, PORTAL == FUNC_TP_BLUE);
-    pts.push_back(transformed_ent.GetCenter());
-    tps_queued.push_back(0);
-
-    // calc ulp diff to nearby portal
-    ulp_diffs.emplace_back();
-    if (cum_primary_tps == 0 || cum_primary_tps == 1) {
-        auto& p_ulp_diff_from = (cum_primary_tps == 0) == blue_primary ? pp->blue : pp->orange;
-        NudgeEntityBehindPortalPlane(transformed_ent, p_ulp_diff_from, &ulp_diffs.back());
-    } else {
-        ulp_diffs.back().SetInvalid();
-    }
-
-    assert(!last_should_tp);
-    if (dg)
-        dg->PushTeleportNode(PORTAL == FUNC_TP_BLUE, cum_primary_tps, ulp_diffs.back());
-
-    ReleaseOwnershipOfEntity<PORTAL>(true);
-    owning_portal = OppositePortalType<PORTAL>();
-
-    cur_touch_call_idx = 0;
-    EntityTouchPortal();
-    cur_touch_call_idx = 1;
-    PortalTouchEntity<OppositePortalType<PORTAL>()>();
-    cur_touch_call_idx = 2;
-    PortalTouchEntity<OppositePortalType<PORTAL>()>();
-    cur_touch_call_idx = 3;
-    EntityTouchPortal();
-
-    if (dg)
-        dg->PopNode();
+    return out;
 }

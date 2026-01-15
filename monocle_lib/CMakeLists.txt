@@ -2,7 +2,7 @@ set(SRC_FILES
 	src/source_math.asm
 	src/source_math.cpp
 	src/vag_logic.cpp
-	src/dot_gen.cpp
+	src/gv_gen.cpp
 )
 
 # Redirect MASM output object file to fix: 'cannot open file : monocle_lib.dir\Debug\/src/source_math.asm.obj'

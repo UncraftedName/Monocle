@@ -106,7 +106,7 @@ struct SearchResult {
     int n_iterations;
     PlacementOrder po;
     Entity ent;
-    TeleportChain chain;
+    TeleportChainResult chain_result;
     PortalPair pp;
 
     void print() const
@@ -125,11 +125,12 @@ struct SearchSpace {
     AABB target_space;
     SearchEntryPosFlags entry_pos_search;
     std::vector<PlacementOrder> valid_placement_orders;
-    EntityInfo ent_info;
     bool tp_from_blue;
     bool tp_player;
 
-    std::optional<SearchResult> FindVag(small_prng& rng, int n_iterations) const
+    TeleportChainParams params; // initialized here
+
+    std::optional<SearchResult> FindVag(small_prng& rng, int n_iterations)
     {
         SearchResult st{.pp{{}, {}, {}, {}}};
         for (int i = 0; i < n_iterations; i++) {
@@ -145,25 +146,34 @@ struct SearchSpace {
             float um = rng.next_float((entry_pos_search & SEPF_UN) ? -PORTAL_HALF_HEIGHT : 0,
                                       (entry_pos_search & SEPF_UP) ? PORTAL_HALF_HEIGHT : 0);
             Vector ent_pos = p.pos + (p.r * rm + p.u * um) * .5f;
-            st.ent = tp_player ? Entity::CreatePlayerFromCenter(ent_pos, true) : Entity::CreateBall(ent_pos, 1.f);
-            st.chain.Generate(st.pp, tp_from_blue, st.ent, ent_info, 3);
+
+            params.pp = &st.pp;
+            params.ent = tp_player ? Entity::CreatePlayerFromCenter(ent_pos, true) : Entity::CreateBall(ent_pos, 1.f);
+            params.n_max_teleports = 3;
+            params.first_tp_from_blue = tp_from_blue;
+            params.nudge_to_first_portal_plane = true;
+            params.map_origin_inbounds = false;
+
+            GenerateTeleportChain(params, st.chain_result);
 
             if (i == 0) {
                 printf("sample portals:\n");
                 st.pp.PrintNewlocationCmd();
                 printf("sample player location:\n%s\n", st.ent.GetSetPosCmd().c_str());
                 printf("expected result for %s: ", PlacementOrderStrs[(int)st.po]);
-                if (st.chain.max_tps_exceeded)
+                if (st.chain_result.max_tps_exceeded)
                     printf("exceeded chain limit\n\n");
                 else
-                    printf("%d cum teleports\n\n", st.chain.cum_primary_tps);
+                    printf("%d cum teleports\n\n", st.chain_result.cum_teleports);
             }
 
-            if (st.chain.max_tps_exceeded)
+            if (st.chain_result.first_ulp_nudge_exceed)
                 continue;
-            if (st.chain.cum_primary_tps != CUM_TP_VAG)
+            if (st.chain_result.max_tps_exceeded)
                 continue;
-            if (!target_space.VectorInBox(st.chain.pts.back()))
+            if (st.chain_result.cum_teleports != -1)
+                continue;
+            if (!target_space.VectorInBox(st.chain_result.ents.back().GetCenter()))
                 continue;
             return st;
         }

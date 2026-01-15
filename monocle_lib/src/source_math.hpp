@@ -131,9 +131,20 @@ struct Vector {
         return (float)d.Dot(d);
     }
 
+    // probably not accurate to game code
+    float DistTo(const Vector& v) const
+    {
+        return sqrtf(DistToSqr(v));
+    }
+
     constexpr Vector operator*(float f) const
     {
         return Vector{x * f, y * f, z * f};
+    }
+
+    constexpr bool operator==(const Vector& o) const
+    {
+        return x == o.x && y == o.y && z == o.z;
     }
 };
 
@@ -213,6 +224,12 @@ struct VPlane {
 #endif
     constexpr VPlane(const Vector& n, float d) : n{n}, d{d} {}
 
+    // not accurate to what game does
+    float DistTo(const Vector& v) const
+    {
+        return (float)(n.Dot(v) - d);
+    }
+
     void print() const
     {
         printf("n=(");
@@ -229,6 +246,9 @@ static constexpr Vector PLAYER_STAND_MINS{-16.f, -16.f, 0.f};
 static constexpr Vector PLAYER_STAND_MAXS{16.f, 16.f, 72.f};
 static constexpr Vector PLAYER_STAND_HALF = (PLAYER_STAND_MINS + PLAYER_STAND_MAXS) * .5f;
 
+#define N_CHILDREN_PLAYER_WITHOUT_PORTAL_GUN 1
+#define N_CHILDREN_PLAYER_WITH_PORTAL_GUN 2
+
 struct Entity {
 
     union {
@@ -242,67 +262,40 @@ struct Entity {
         struct {
             Vector center;
             float radius;
-        } nonPlayer;
+        } ball;
     };
 
-    bool isPlayer;
+    bool is_player;
+
+    /*
+    * The number of children the entity has. Usually this is N_CHILDREN_PLAYER_WITH_PORTAL_GUN for
+    * the player and 0 otherwise.
+    * 
+    * This *is* used in the chain generation code, and it's possible that it may be relevant in
+    * some niche cases, although I haven't found any (yet).
+    */
+    unsigned short n_children;
 
 public:
 #ifdef DEBUG_NAN_CTORS
-    Entity() : isPlayer(true), player(Vector{}, true) {}
+    Entity() : is_player(true), player(Vector{}, true), n_children(N_CHILDREN_PLAYER_WITH_PORTAL_GUN) {}
 #else
     Entity() {}
 #endif
 
     // named constructors
+    static Entity CreatePlayerFromOrigin(Vector origin, bool crouched);
+    static Entity CreatePlayerFromCenter(Vector center, bool crouched);
+    static Entity CreateBall(Vector center, float radius);
 
-    static Entity CreatePlayerFromOrigin(Vector origin, bool crouched)
-    {
-        Entity ent;
-        ent.isPlayer = true;
-        ent.player.origin = origin;
-        ent.player.crouched = crouched;
-        return ent;
-    }
-
-    static Entity CreatePlayerFromCenter(Vector center, bool crouched)
-    {
-        return CreatePlayerFromOrigin(center - (crouched ? PLAYER_CROUCH_HALF : PLAYER_STAND_HALF), crouched);
-    }
-
-    static Entity CreateBall(Vector center, float radius)
-    {
-        Entity ent;
-        ent.isPlayer = false;
-        ent.nonPlayer.center = center;
-        ent.nonPlayer.radius = radius;
-        return ent;
-    }
-
-    Vector GetWorldMins() const
-    {
-        if (isPlayer)
-            return player.origin + (player.crouched ? PLAYER_CROUCH_MINS : PLAYER_STAND_MINS);
-        return nonPlayer.center + Vector(nonPlayer.radius);
-    }
-
-    Vector GetWorldMaxs() const
-    {
-        if (isPlayer)
-            return player.origin + (player.crouched ? PLAYER_CROUCH_MAXS : PLAYER_STAND_MAXS);
-        return nonPlayer.center + Vector(nonPlayer.radius);
-    }
-
-    Vector GetCenter() const
-    {
-        if (isPlayer)
-            return player.origin + (player.crouched ? PLAYER_CROUCH_HALF : PLAYER_STAND_HALF);
-        return nonPlayer.center;
-    }
+    Vector GetWorldMins() const;
+    Vector GetWorldMaxs() const;
+    Vector GetCenter() const;
+    bool operator==(const Entity& other) const;
 
     Vector& GetPosRef()
     {
-        return isPlayer ? player.origin : nonPlayer.center;
+        return is_player ? player.origin : ball.center;
     }
 
     std::string GetSetPosCmd() const;

@@ -14,7 +14,6 @@
 #include "vag_search.hpp"
 
 #include <vector>
-// #include <matplot/matplot.h>
 
 enum PITCH_YAW_TYPE {
     PYT_WALL_ALIGNED,
@@ -82,39 +81,6 @@ static QAngle RandomAng(small_prng& rng, PITCH_YAW_TYPE type, bool has_roll)
     return QAngle(p, y, has_roll ? rng.next_float(-180.f, 180.f) : 0.f);
 }
 
-static void PlotUlpDistribution()
-{
-    small_prng rng{2};
-    TeleportChain chain;
-    std::vector<int> ulp_diffs;
-    for (int i = 0; i < 100000; i++) {
-        PortalPair pp{
-            RandomPos(rng, rng.next_int(0, 8), rng.next_int(4, 10)),
-            RandomAng(rng, PYT_ANY, true),
-            RandomPos(rng, rng.next_int(0, 8), rng.next_int(4, 10)),
-            RandomAng(rng, PYT_ANY, true),
-        };
-        pp.CalcTpMatrices(PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION);
-        Entity ent = Entity::CreatePlayerFromCenter(pp.blue.pos, true);
-        EntityInfo ent_info{
-            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .origin_inbounds = false,
-        };
-        chain.Generate(pp, true, ent, ent_info, 3);
-        if (chain.max_tps_exceeded)
-            continue;
-        assert(chain.ulp_diffs[1].Valid());
-        ulp_diffs.push_back(chain.ulp_diffs[1].diff);
-    }
-
-    int smallest = *std::ranges::min_element(ulp_diffs);
-    int biggest = *std::ranges::max_element(ulp_diffs);
-
-    /*using namespace matplot;
-    auto h = hist(ulp_diffs);
-    show();*/
-}
-
 static void GenerateResultsDistributionsToFile()
 {
     enum RS_AX {
@@ -125,8 +91,9 @@ static void GenerateResultsDistributionsToFile()
     };
 
     small_prng rng{};
+    TeleportChainParams params;
+    TeleportChainResult result;
     const int n_runs_per_combination = 10000;
-    TeleportChain chain;
 
     std::ofstream of{"results.txt"};
     of << "{\n";
@@ -167,17 +134,22 @@ static void GenerateResultsDistributionsToFile()
             Vector ent_pos = pp.blue.pos +
                              pp.blue.r * rng.next_float(-PORTAL_HALF_WIDTH * .5f, PORTAL_HALF_WIDTH * .5f) +
                              pp.blue.u * rng.next_float(-PORTAL_HALF_HEIGHT * .5f, PORTAL_HALF_HEIGHT * .5f);
-            Entity ent = Entity::CreatePlayerFromCenter(ent_pos, true);
-            EntityInfo ent_info{
-                .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-                .origin_inbounds = false,
-            };
-            chain.Generate(pp, true, ent, ent_info, 3);
-            if (chain.max_tps_exceeded)
+
+            params.pp = &pp;
+            params.ent = Entity::CreatePlayerFromCenter(ent_pos, true);
+            params.map_origin_inbounds = false;
+            params.nudge_to_first_portal_plane = true;
+            params.first_tp_from_blue = true;
+            params.n_max_teleports = 3;
+            params.record_flags = TCRF_NONE;
+
+            GenerateTeleportChain(params, result);
+
+            if (result.max_tps_exceeded)
                 results[RESULT_UNKNOWN]++;
-            else if (chain.cum_primary_tps == 1)
+            else if (result.cum_teleports == 1)
                 results[RESULT_TP]++;
-            else if (chain.cum_primary_tps == -1)
+            else if (result.cum_teleports == -1)
                 results[RESULT_VAG]++;
             else
                 assert(0);
@@ -226,7 +198,8 @@ static void CreateOverlayPortalImage(const PortalPair& pair,
 
         pool.push([x_res, u_off, y, from_blue, &p, &pair, &pixels, rand_nudge](int) -> void {
             small_prng rng{y};
-            TeleportChain chain;
+            TeleportChainParams params;
+            TeleportChainResult result;
             for (size_t x = 0; x < x_res; x++) {
                 float rx = rand_nudge ? rng.next_float(-.1f, .1f) : 0.f;
                 float ox = PORTAL_HALF_WIDTH * (-1 + 1.f / x_res);
@@ -234,26 +207,27 @@ static void CreateOverlayPortalImage(const PortalPair& pair,
                 float mx = ox * (1 - 2 * tx);
 
                 Vector r_off = p.r * mx;
-                Entity ent = Entity::CreatePlayerFromCenter(p.pos + r_off + u_off, true);
+                params.pp = &pair;
+                params.ent = Entity::CreatePlayerFromCenter(p.pos + r_off + u_off, true);
+                params.map_origin_inbounds = false;
+                params.n_max_teleports = 10;
+                params.first_tp_from_blue = from_blue;
+                params.nudge_to_first_portal_plane = true;
 
-                EntityInfo ent_info{
-                    .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-                    .origin_inbounds = false,
-                };
-                size_t n_max_teleports = 10;
-                chain.Generate(pair, from_blue, ent, ent_info, n_max_teleports);
+                GenerateTeleportChain(params, result);
+
                 pixel& pix = pixels[x_res * y + x];
                 pix.a = 255;
-                if (chain.max_tps_exceeded)
+                if (result.max_tps_exceeded)
                     pix.r = pix.g = pix.b = 0;
-                else if (chain.cum_primary_tps == 0)
+                else if (result.cum_teleports == 0)
                     pix.r = pix.g = pix.b = 125;
-                else if (chain.cum_primary_tps == 1)
+                else if (result.cum_teleports == 1)
                     pix.r = pix.g = pix.b = 255;
-                else if (chain.cum_primary_tps < 0 && chain.cum_primary_tps >= -3)
-                    pix.r = 85 * -chain.cum_primary_tps;
-                else if (chain.cum_primary_tps > 1 && chain.cum_primary_tps <= 4)
-                    pix.g = 85 * (chain.cum_primary_tps - 1);
+                else if (result.cum_teleports < 0 && result.cum_teleports >= -3)
+                    pix.r = 85 * -result.cum_teleports;
+                else if (result.cum_teleports > 1 && result.cum_teleports <= 4)
+                    pix.g = 85 * (result.cum_teleports - 1);
                 else
                     pix.b = 255;
             }
@@ -269,7 +243,9 @@ static void FindVagIn04()
     TIME_FUNC();
 
     small_prng rng{0};
-    TeleportChain chain;
+    TeleportChainParams params;
+    TeleportChainResult result;
+
     float xmin = -75.70868f;
     float xmax = 145.85846f;
     float ymin = 311.f;
@@ -290,23 +266,27 @@ static void FindVagIn04()
         pp.CalcTpMatrices(PlacementOrder::BLUE_WAS_CLOSED_ORANGE_OPENED);
         float r = rng.next_float(-PORTAL_HALF_WIDTH * 0.5f, PORTAL_HALF_WIDTH * 0.5f);
         float u = rng.next_float(-PORTAL_HALF_HEIGHT * 0.5f, PORTAL_HALF_HEIGHT * 0.5f);
-        Entity ent = Entity::CreatePlayerFromCenter(pp.blue.pos + pp.blue.r * r + pp.blue.u * u, true);
-        EntityInfo ent_info{
-            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .origin_inbounds = true,
-        };
-        chain.Generate(pp, true, ent, ent_info, 3);
-        if (chain.max_tps_exceeded)
+
+        params.pp = &pp;
+        params.ent = Entity::CreatePlayerFromCenter(pp.blue.pos + pp.blue.r * r + pp.blue.u * u, true);
+        params.map_origin_inbounds = true;
+        params.first_tp_from_blue = true;
+        params.n_max_teleports = 3;
+        params.nudge_to_first_portal_plane = true;
+
+        GenerateTeleportChain(params, result);
+
+        if (result.max_tps_exceeded)
             continue;
-        if (chain.cum_primary_tps != -1)
+        if (result.cum_teleports != -1)
             continue;
-        Vector t = chain.pts[chain.pts.size() - 1];
+        Vector t = result.ent.GetCenter();
         if (t.x < target_mins.x || t.y < target_mins.y || t.z < target_mins.z)
             continue;
         if (t.x > target_maxs.x || t.y > target_maxs.y || t.z > target_maxs.z)
             continue;
         pp.PrintNewlocationCmd();
-        printf("%s\n", ent.GetSetPosCmd().c_str());
+        printf("%s\n", result.ent.GetSetPosCmd().c_str());
         const char* file_name = "04_blue.tga";
         printf("Found portal, generating overlay image\n");
         CreateOverlayPortalImage(pp, file_name, 1000, true);
@@ -337,10 +317,6 @@ static void FindVag18StartCeilCubeRoom()
             PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
             PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION,
         },
-        .ent_info{
-            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .origin_inbounds = false,
-        },
         .tp_from_blue = true,
         .tp_player = true,
     };
@@ -359,7 +335,9 @@ static void FindComplexChain()
 {
     small_prng rng{0};
     AABB pos_space{Vector{30, 30, 750}, Vector{400, 400, 1000}};
-    TeleportChain chain;
+    TeleportChainParams params;
+    TeleportChainResult result;
+
     for (int i = 0; i < 1000000; i++) {
         PortalPair pp{
             pos_space.RandomPtInBox(rng),
@@ -370,19 +348,23 @@ static void FindComplexChain()
         if (pp.blue.pos.DistToSqr(pp.orange.pos) < 200 * 200)
             continue;
         pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
-        Entity ent = Entity::CreatePlayerFromCenter(pp.blue.pos, true);
-        EntityInfo ent_info{
-            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .origin_inbounds = true,
-        };
-        chain.Generate(pp, true, ent, ent_info, 10);
-        if (chain.max_tps_exceeded)
+
+        params.pp = &pp;
+        params.ent = Entity::CreatePlayerFromCenter(pp.blue.pos, true);
+        params.map_origin_inbounds = true;
+        params.n_max_teleports = 10;
+        params.first_tp_from_blue = true;
+        params.nudge_to_first_portal_plane = true;
+
+        GenerateTeleportChain(params, result);
+
+        if (result.max_tps_exceeded)
             continue;
-        if (chain.cum_primary_tps >= -1 && chain.cum_primary_tps <= 1)
+        if (result.cum_teleports >= -1 && result.cum_teleports <= 1)
             continue;
-        printf("iteration %u, %u teleports, %d cum teleports\n", i, chain.tp_dirs.size(), chain.cum_primary_tps);
+        printf("iteration %u, %u teleports, %d cum teleports\n", i, result.tp_dirs.size(), result.cum_teleports);
         pp.PrintNewlocationCmd();
-        printf("%s\n", ent.GetSetPosCmd().c_str());
+        printf("%s\n", result.ent.GetSetPosCmd().c_str());
         printf("generating overlay image...\n");
         CreateOverlayPortalImage(pp, "complex_chain.tga", 1000, true);
         break;
@@ -400,20 +382,24 @@ static void DebugInfinite09Chain()
         QAngle{0.f, 0.f, 0.f},
     };
     pp.CalcTpMatrices(PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED);
-    Entity player = Entity::CreatePlayerFromCenter(Vector{-127.96876f, -191.24300f, 182.03125f}, true);
-    TeleportChain chain;
-    EntityInfo ent_info{
-        .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-        .origin_inbounds = false,
+
+    TeleportChainParams params{
+        &pp,
+        Entity::CreatePlayerFromCenter(Vector{-127.96876f, -191.24300f, 182.03125f}, true),
     };
-    chain.Generate(pp, false, player, ent_info, 5000);
+    params.n_max_teleports = 5000;
+    TeleportChainResult result;
+
+    GenerateTeleportChain(params, result);
 }
 
 static void CreateSpinAnimation()
 {
     small_prng rng{20};
     AABB pos_space{Vector{30, 30, 750}, Vector{400, 400, 1000}};
-    TeleportChain chain;
+    TeleportChainParams params;
+    TeleportChainResult result;
+
     for (int i = 0; i < 100000; i++) {
         PortalPair pp{
             pos_space.RandomPtInBox(rng),
@@ -424,17 +410,21 @@ static void CreateSpinAnimation()
         if (pp.blue.pos.DistToSqr(pp.orange.pos) < 100 * 100)
             continue;
         pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
-        Entity ent = Entity::CreatePlayerFromCenter(pp.blue.pos + pp.blue.r, true);
-        EntityInfo ent_info{
-            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .origin_inbounds = false,
-        };
-        chain.Generate(pp, true, ent, ent_info, 10);
-        if (chain.max_tps_exceeded || chain.cum_primary_tps != CUM_TP_NORMAL_TELEPORT)
+
+        params.pp = &pp;
+        params.ent = Entity::CreatePlayerFromCenter(pp.blue.pos + pp.blue.r, true);
+        params.n_max_teleports = 10;
+        params.first_tp_from_blue = true;
+        params.nudge_to_first_portal_plane = true;
+
+        GenerateTeleportChain(params, result);
+
+        if (result.max_tps_exceeded || result.cum_teleports != 1)
             continue;
-        ent = Entity::CreatePlayerFromCenter(pp.blue.pos - pp.blue.r, true);
-        chain.Generate(pp, true, ent, ent_info, 10);
-        if (chain.max_tps_exceeded || chain.cum_primary_tps != CUM_TP_VAG)
+        params.ent = Entity::CreatePlayerFromCenter(pp.blue.pos - pp.blue.r, true);
+        GenerateTeleportChain(params, result);
+
+        if (result.max_tps_exceeded || result.cum_teleports != -1)
             continue;
         for (int i = -180; i < 180; i++) {
             PortalPair pp2{pp.blue.pos, {pp.blue.ang.x, (float)i, 0}, pp.orange.pos, pp.orange.ang};
@@ -451,7 +441,9 @@ static void FindInfiniteChain()
 {
     small_prng rng{0};
     AABB pos_space{Vector{30, 30, 750}, Vector{400, 400, 1000}};
-    TeleportChain chain;
+    TeleportChainParams params;
+    TeleportChainResult result;
+
     for (int i = 0; i < 100000; i++) {
         PortalPair pp{
             pos_space.RandomPtInBox(rng),
@@ -462,16 +454,19 @@ static void FindInfiniteChain()
         if (pp.blue.pos.DistToSqr(pp.orange.pos) < 100 * 100)
             continue;
         pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
-        Entity player = Entity::CreatePlayerFromCenter(pp.blue.pos, true);
-        EntityInfo ent_info{
-            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .origin_inbounds = false,
-        };
-        chain.Generate(pp, true, player, ent_info, 400000);
-        if (!chain.max_tps_exceeded)
+
+        params.pp = &pp;
+        params.ent = Entity::CreatePlayerFromCenter(pp.blue.pos, true);
+        params.nudge_to_first_portal_plane = true;
+        params.n_max_teleports = 400000;
+        params.first_tp_from_blue = true;
+
+        GenerateTeleportChain(params, result);
+
+        if (!result.max_tps_exceeded)
             continue;
         pp.PrintNewlocationCmd();
-        printf("%s\n", player.GetSetPosCmd().c_str());
+        printf("%s\n", params.ent.GetSetPosCmd().c_str());
         break;
     }
 }
@@ -480,7 +475,9 @@ static void FindFiniteChainThatGivesNFE()
 {
     small_prng rng{0};
     AABB pos_space{Vector{30, 30, 750}, Vector{400, 400, 1000}};
-    TeleportChain chain;
+    TeleportChainParams params;
+    TeleportChainResult result;
+
     for (int i = 0; i < 1000000; i++) {
         PortalPair pp{
             pos_space.RandomPtInBox(rng),
@@ -491,23 +488,26 @@ static void FindFiniteChainThatGivesNFE()
         if (pp.blue.pos.DistToSqr(pp.orange.pos) < 100 * 100)
             continue;
         pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
-        Entity player = Entity::CreatePlayerFromCenter(pp.blue.pos, true);
-        EntityInfo ent_info{
-            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .origin_inbounds = false,
-        };
-        chain.Generate(pp, true, player, ent_info, 34);
-        if (chain.max_tps_exceeded)
+
+        params.pp = &pp;
+        params.ent = Entity::CreatePlayerFromCenter(pp.blue.pos, true);
+        params.n_max_teleports = 34;
+        params.map_origin_inbounds = false;
+        params.first_tp_from_blue = true;
+        params.nudge_to_first_portal_plane = true;
+
+        GenerateTeleportChain(params, result);
+
+        if (result.max_tps_exceeded)
             continue;
-        if (chain.cum_primary_tps != 0)
+        if (result.cum_teleports != 0)
             continue;
-        VecUlpDiff diff;
-        NudgeEntityBehindPortalPlane(chain.transformed_ent, pp.blue, &diff);
-        if (!diff.PtWasBehindPlane())
+        auto [nudged_ent, ulp_diff] = NudgeEntityBehindPortalPlane(result.ent, pp.blue);
+        if (!ulp_diff.PtWasBehindPlane())
             continue;
-        printf("found chain of length %u on iteration %d\n", chain.tp_dirs.size(), i);
+        printf("found chain of length %u on iteration %d\n", result.tp_dirs.size(), i);
         pp.PrintNewlocationCmd();
-        printf("%s\n", Entity::CreatePlayerFromCenter(chain.pts.front(), true).GetSetPosCmd().c_str());
+        printf("%s\n", Entity::CreatePlayerFromCenter(result.ents[0].GetCenter(), true).GetSetPosCmd().c_str());
         break;
     }
 }
@@ -540,10 +540,6 @@ static void FindVagIn09EleTop()
         .valid_placement_orders{
             PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
             PlacementOrder::AFTER_LOAD,
-        },
-        .ent_info{
-            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .origin_inbounds = false,
         },
         .tp_from_blue = false,
         .tp_player = true,
@@ -583,10 +579,6 @@ static void FindVagIn09EleBottom()
             PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
             PlacementOrder::AFTER_LOAD,
         },
-        .ent_info{
-            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .origin_inbounds = false,
-        },
         .tp_from_blue = false,
         .tp_player = true,
     };
@@ -615,10 +607,6 @@ static void FindVagIn11()
             PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
             PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION,
             PlacementOrder::AFTER_LOAD,
-        },
-        .ent_info{
-            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .origin_inbounds = true,
         },
         .tp_from_blue = false,
         .tp_player = true,
@@ -651,10 +639,6 @@ static void FindKnownVagIn11()
             PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
             PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION,
             PlacementOrder::AFTER_LOAD,
-        },
-        .ent_info{
-            .n_ent_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN,
-            .origin_inbounds = true,
         },
         .tp_from_blue = false,
         .tp_player = true,
