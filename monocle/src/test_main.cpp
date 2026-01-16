@@ -147,9 +147,9 @@ TEST_CASE("ShouldTeleport (with portal hole check")
     INFO("corner: " << ((corner_bits & 1) ? "-f " : "+f ") << ((corner_bits & 2) ? "-r " : "+r ")
                     << ((corner_bits & 4) ? "-u" : "+u"));
 
-    mon::Vector corner_off = p.f * ((corner_bits & 1) ? -PORTAL_HOLE_DEPTH : 0.f) +
-                             p.r * ((corner_bits & 2) ? -PORTAL_HALF_WIDTH : PORTAL_HALF_WIDTH) +
-                             p.u * ((corner_bits & 4) ? -PORTAL_HALF_HEIGHT : PORTAL_HALF_HEIGHT);
+    mon::Vector corner_off = p.f * ((corner_bits & 1) ? -mon::PORTAL_HOLE_DEPTH : 0.f) +
+                             p.r * ((corner_bits & 2) ? -mon::PORTAL_HALF_WIDTH : mon::PORTAL_HALF_WIDTH) +
+                             p.u * ((corner_bits & 4) ? -mon::PORTAL_HALF_HEIGHT : mon::PORTAL_HALF_HEIGHT);
 
     constexpr float SPACING = 20.f;
 

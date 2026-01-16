@@ -129,9 +129,9 @@ static void GenerateResultsDistributionsToFile()
                 RandomAng(rng, (PITCH_YAW_TYPE)std::get<1>(orange_opts), std::get<2>(orange_opts)),
                 (mon::PlacementOrder)std::get<0>(misc_opts),
             };
-            mon::Vector ent_pos = pp.blue.pos +
-                                  pp.blue.r * rng.next_float(-PORTAL_HALF_WIDTH * .5f, PORTAL_HALF_WIDTH * .5f) +
-                                  pp.blue.u * rng.next_float(-PORTAL_HALF_HEIGHT * .5f, PORTAL_HALF_HEIGHT * .5f);
+            mon::Vector ent_pos =
+                pp.blue.pos + pp.blue.r * rng.next_float(-mon::PORTAL_HALF_WIDTH * .5f, mon::PORTAL_HALF_WIDTH * .5f) +
+                pp.blue.u * rng.next_float(-mon::PORTAL_HALF_HEIGHT * .5f, mon::PORTAL_HALF_HEIGHT * .5f);
 
             params.pp = &pp;
             params.ent = mon::Entity::CreatePlayerFromCenter(ent_pos, true);
@@ -179,7 +179,7 @@ static void CreateOverlayPortalImage(const mon::PortalPair& pair,
     TIME_FUNC();
 
     const mon::Portal& p = from_blue ? pair.blue : pair.orange;
-    size_t x_res = (size_t)((double)y_res * PORTAL_HALF_WIDTH / PORTAL_HALF_HEIGHT);
+    size_t x_res = (size_t)((double)y_res * mon::PORTAL_HALF_WIDTH / mon::PORTAL_HALF_HEIGHT);
     struct pixel {
         uint8_t b, g, r, a;
     };
@@ -188,7 +188,7 @@ static void CreateOverlayPortalImage(const mon::PortalPair& pair,
     ctpl::thread_pool pool{n_threads ? n_threads : 4};
     for (size_t y = 0; y < y_res; y++) {
 
-        float oy = PORTAL_HALF_HEIGHT * (-1 + 1.f / y_res);
+        float oy = mon::PORTAL_HALF_HEIGHT * (-1 + 1.f / y_res);
         float ty = (float)y / (y_res - 1);
         float my = oy * (1 - 2 * ty);
         mon::Vector u_off = p.u * my;
@@ -199,7 +199,7 @@ static void CreateOverlayPortalImage(const mon::PortalPair& pair,
             mon::TeleportChainResult result;
             for (size_t x = 0; x < x_res; x++) {
                 float rx = rand_nudge ? rng.next_float(-.1f, .1f) : 0.f;
-                float ox = PORTAL_HALF_WIDTH * (-1 + 1.f / x_res);
+                float ox = mon::PORTAL_HALF_WIDTH * (-1 + 1.f / x_res);
                 float tx = ((float)x + rx) / (x_res - 1);
                 float mx = ox * (1 - 2 * tx);
 
@@ -261,8 +261,8 @@ static void FindVagIn04()
             {0, 90, 0},
             mon::PlacementOrder::BLUE_WAS_CLOSED_ORANGE_OPENED,
         };
-        float r = rng.next_float(-PORTAL_HALF_WIDTH * 0.5f, PORTAL_HALF_WIDTH * 0.5f);
-        float u = rng.next_float(-PORTAL_HALF_HEIGHT * 0.5f, PORTAL_HALF_HEIGHT * 0.5f);
+        float r = rng.next_float(-mon::PORTAL_HALF_WIDTH * 0.5f, mon::PORTAL_HALF_WIDTH * 0.5f);
+        float u = rng.next_float(-mon::PORTAL_HALF_HEIGHT * 0.5f, mon::PORTAL_HALF_HEIGHT * 0.5f);
 
         params.pp = &pp;
         params.ent = mon::Entity::CreatePlayerFromCenter(pp.blue.pos + pp.blue.r * r + pp.blue.u * u, true);

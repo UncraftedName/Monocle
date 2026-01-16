@@ -14,9 +14,9 @@
 
 namespace mon {
 
-#define PORTAL_HALF_WIDTH 32.0f
-#define PORTAL_HALF_HEIGHT 54.0f
-#define PORTAL_HOLE_DEPTH 500.f
+constexpr float PORTAL_HALF_WIDTH = 32.f;
+constexpr float PORTAL_HALF_HEIGHT = 54.f;
+constexpr float PORTAL_HOLE_DEPTH = 500.f;
 
 inline void SyncFloatingPointControlWord()
 {
