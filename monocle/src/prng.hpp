@@ -1,7 +1,8 @@
 #pragma once
 
+#include "monocle_config.hpp"
+
 #include <stdint.h>
-#include <assert.h>
 
 /*! \class small_prng
 \brief From http://burtleburtle.net/bob/rand/smallprng.html, a not awful fast random number source.
@@ -47,14 +48,14 @@ public:
     // [a, b)
     int next_int(int a, int b)
     {
-        assert(b > a);
+        MON_ASSERT(b > a);
         return (*this)() % (value_type)(b - a) + a;
     }
 
     // [a, b]
     float next_float(float a, float b)
     {
-        assert(b > a);
+        MON_ASSERT(b > a);
         return (*this)() / static_cast<float>(UINT32_MAX) * (b - a) + a;
     }
 

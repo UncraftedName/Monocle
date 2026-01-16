@@ -1,11 +1,10 @@
 #pragma once
 
-#include <vector>
-#include <assert.h>
-#include <optional>
-
 #include "source_math.hpp"
 #include "prng.hpp"
+
+#include <vector>
+#include <optional>
 
 struct AABB {
     Vector mins, maxs;
@@ -78,7 +77,7 @@ struct SearchPortal {
                 ang = {90.f, rng.next_float(-180.f, 180.f), 0.f};
                 break;
             default:
-                assert(0);
+                MON_ASSERT(0);
         }
         float lock_ax_val = rng.next_elem(lock_opts);
         const AABB& pos_space = rng.next_elem(pos_spaces);
@@ -144,7 +143,7 @@ struct SearchSpace {
             };
 
             const Portal& p = tp_from_blue ? st.pp.blue : st.pp.orange;
-            assert((entry_pos_search & SEPF_ANY) != 0);
+            MON_ASSERT((entry_pos_search & SEPF_ANY) != 0);
             float rm = rng.next_float((entry_pos_search & SEPF_RN) ? -PORTAL_HALF_WIDTH : 0,
                                       (entry_pos_search & SEPF_RP) ? PORTAL_HALF_WIDTH : 0);
             float um = rng.next_float((entry_pos_search & SEPF_UN) ? -PORTAL_HALF_HEIGHT : 0,

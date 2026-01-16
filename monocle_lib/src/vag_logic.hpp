@@ -1,13 +1,13 @@
 #pragma once
 
+#include "source_math.hpp"
+
 #include <stdint.h>
 #include <vector>
 #include <deque>
 #include <string>
 #include <memory>
 #include <utility>
-
-#include "source_math.hpp"
 
 class GvGen;
 

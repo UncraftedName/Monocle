@@ -1,10 +1,3 @@
-#include <iostream>
-#include <algorithm>
-#include <ranges>
-#include <numeric>
-
-#include <fstream>
-
 #include "source_math.hpp"
 #include "vag_logic.hpp"
 #include "prng.hpp"
@@ -13,6 +6,11 @@
 #include "time_scope.hpp"
 #include "vag_search.hpp"
 
+#include <iostream>
+#include <algorithm>
+#include <ranges>
+#include <numeric>
+#include <fstream>
 #include <vector>
 
 enum PITCH_YAW_TYPE {
@@ -76,7 +74,7 @@ static QAngle RandomAng(small_prng& rng, PITCH_YAW_TYPE type, bool has_roll)
         case PYT_COUNT:
         default:
             p = y = 0.f;
-            assert(0);
+            MON_ASSERT(0);
     }
     return QAngle(p, y, has_roll ? rng.next_float(-180.f, 180.f) : 0.f);
 }
@@ -151,7 +149,7 @@ static void GenerateResultsDistributionsToFile()
             else if (result.cum_teleports == -1)
                 results[RESULT_VAG]++;
             else
-                assert(0);
+                MON_ASSERT(0);
         }
         of << (n_complete ? ",\n" : "\n") << "{\n\t\"label\":\n\t{\n";
         for (int i = 0; i < 2; i++) {

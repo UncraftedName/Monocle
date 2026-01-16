@@ -86,7 +86,7 @@ bool Portal::ShouldTeleport(const Entity& ent, bool check_portal_hole) const
             if (BoxOnPlaneSide(world_mins, world_maxs, hole_planes[i], hole_planes_bits[i]) == PSR_FRONT)
                 return false;
     } else {
-        assert(("entities that are too small will fail portal hole check", ent.ball.radius >= 1.f));
+        MON_ASSERT_MSG(ent.ball.radius >= 1.f, "entities that are too small will fail portal hole check");
         for (int i = 0; i < 6; i++)
             if (BallOnPlaneSide(ent.ball.center, ent.ball.radius, hole_planes[i]) == PSR_FRONT)
                 return false;
@@ -170,7 +170,7 @@ void PortalPair::RecalcTpMatrices(PlacementOrder order_)
             break;
         }
         default:
-            assert(0);
+            MON_ASSERT(0);
     }
     order = order_;
 }
@@ -255,7 +255,7 @@ int BoxOnPlaneSide(const Vector& mins, const Vector& maxs, const VPlane& p, plan
             d2 = p.n[0] * maxs[0] + p.n[1] * maxs[1] + p.n[2] * maxs[2];
             break;
         default:
-            assert(0);
+            MON_ASSERT(0);
             d1 = d2 = 0.f;
     }
     int r = 0;
@@ -263,7 +263,7 @@ int BoxOnPlaneSide(const Vector& mins, const Vector& maxs, const VPlane& p, plan
         r |= PSR_FRONT;
     if (d2 < p.d)
         r |= PSR_BACK;
-    assert(r);
+    MON_ASSERT(r != 0);
     return r;
 }
 
@@ -334,6 +334,6 @@ bool Entity::operator==(const Entity& other) const
 
 std::string Entity::GetSetPosCmd() const
 {
-    assert(is_player);
+    MON_ASSERT(is_player);
     return std::format("setpos {:.9g} {:.9g} {:.9g}", player.origin.x, player.origin.y, player.origin.z);
 }

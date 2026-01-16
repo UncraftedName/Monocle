@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <filesystem>
+#include <fstream>
 
 /// <summary> Writes an uncompressed 24 or 32 bit .tga image to the indicated file! </summary>
 /// <param name='filename'>I'd recommended you add a '.tga' to the end of this filename.</param>

@@ -34,7 +34,7 @@ struct std::formatter<tp_queue_view, Char> {
             case CHAIN_DEFS::FUNC_RECHECK_COLLISION:
                 return Char('R');
             default:
-                assert(qe < 0);
+                MON_ASSERT(qe < 0);
                 return Char('N');
         }
     }

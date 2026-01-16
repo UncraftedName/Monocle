@@ -1,12 +1,12 @@
 #pragma once
 
+#include "monocle_config.hpp"
+
 #include <float.h>
 #include <array>
 #include <string>
-
-#include "math.h"
-#include "stdio.h"
-#include "assert.h"
+#include <math.h>
+#include <stdio.h>
 
 #define F_FMT "%.9g"
 
@@ -22,7 +22,7 @@ inline void SyncFloatingPointControlWord()
                      (_EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW | _EM_ZERODIVIDE | _EM_INVALID | _EM_DENORMAL) |
                          (_RC_NEAR | _PC_53 | _IC_PROJECTIVE),
                      ~0u);
-    assert(!err);
+    MON_ASSERT(!err);
 }
 
 #ifndef NDEBUG
@@ -101,13 +101,13 @@ struct Vector {
 
     float& operator[](int i)
     {
-        assert(i >= 0 && i < 3);
+        MON_ASSERT(i >= 0 && i < 3);
         return ((float*)this)[i];
     }
 
     float operator[](int i) const
     {
-        assert(i >= 0 && i < 3);
+        MON_ASSERT(i >= 0 && i < 3);
         return ((float*)this)[i];
     }
 
@@ -175,7 +175,7 @@ struct matrix3x4_t {
 
     float* operator[](int i)
     {
-        assert((i >= 0) && (i < 3));
+        MON_ASSERT(i >= 0 && i < 3);
         return m_flMatVal[i];
     }
 

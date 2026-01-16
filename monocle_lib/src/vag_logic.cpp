@@ -1,12 +1,12 @@
+#include "vag_logic.hpp"
+#include "ulp_diff.hpp"
+
 #include <cmath>
 #include <algorithm>
 #include <stdarg.h>
 #include <vector>
 #include <fstream>
 #include <format>
-
-#include "vag_logic.hpp"
-#include "ulp_diff.hpp"
 
 std::pair<Entity, PointToPortalPlaneUlpDist> ProjectEntityToPortalPlane(const Entity& ent, const Portal& portal)
 {
@@ -165,7 +165,7 @@ struct GenerateTeleportChainImpl {
                     TeleportEntity<CHAIN_DEFS::FUNC_TP_ORANGE>();
                     break;
                 default:
-                    assert(val < 0);
+                    MON_ASSERT(val < 0);
                     dequeued_null = true;
                     break;
             }
@@ -289,7 +289,7 @@ struct GenerateTeleportChainImpl {
 
 void GenerateTeleportChain(const TeleportChainParams& params, TeleportChainResult& result)
 {
-    assert(!!params.pp);
+    MON_ASSERT(!!params.pp);
 
     GenerateTeleportChainImpl impl{params, result};
     impl.ResetState();
