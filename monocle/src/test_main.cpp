@@ -261,19 +261,17 @@ TEST_CASE("Nudging point towards portal plane")
     pt[0] += pt[0] / 100000.f;
 
     Entity ent = is_player ? Entity::CreatePlayerFromCenter(pt, true) : Entity::CreateBall(pt, 0.f);
-    auto [nudged_ent, ulp_diff] = NudgeEntityBehindPortalPlane(ent, p);
-    REQUIRE(ulp_diff.Valid());
-    REQUIRE(p.ShouldTeleport(ent, false) == ulp_diff.PtWasBehindPlane());
+    auto [nudged_ent, plane_dist] = ProjectEntityToPortalPlane(ent, p);
+    REQUIRE(!!plane_dist.is_valid);
+    REQUIRE(p.ShouldTeleport(ent, false) == !!plane_dist.pt_was_behind_portal);
 
-    if (!ulp_diff.diff_overflow) {
-        // nudged entity is guaranteed to be behind the portal
-        REQUIRE(p.ShouldTeleport(nudged_ent, false));
-        // nudge the entity across the portal boundary
-        Vector& ent_pos = nudged_ent.GetPosRef();
-        float target = ent_pos[ulp_diff.ax] + p.plane.n[ulp_diff.ax];
-        ent_pos[ulp_diff.ax] = std::nextafterf(ent_pos[ulp_diff.ax], target);
-        REQUIRE_FALSE(p.ShouldTeleport(nudged_ent, false));
-    }
+    // nudged entity is guaranteed to be behind the portal
+    REQUIRE(p.ShouldTeleport(nudged_ent, false));
+    // nudge the entity across the portal boundary
+    Vector& ent_pos = nudged_ent.GetPosRef();
+    float target = ent_pos[plane_dist.ax] + p.plane.n[plane_dist.ax];
+    ent_pos[plane_dist.ax] = std::nextafterf(ent_pos[plane_dist.ax], target);
+    REQUIRE_FALSE(p.ShouldTeleport(nudged_ent, false));
 }
 
 TEST_CASE("Teleport chain results in VAG")
@@ -295,7 +293,7 @@ TEST_CASE("Teleport chain results in VAG")
         &pp,
         Entity::CreatePlayerFromCenter(Vector{-127.96876f, -191.24300f, 182.03125f}, true),
     };
-    params.nudge_to_first_portal_plane = true;
+    params.project_to_first_portal_plane = true;
     params.record_flags = TCRF_RECORD_ALL;
     TeleportChainResult result;
 
@@ -311,12 +309,11 @@ TEST_CASE("Teleport chain results in VAG")
 
             int n_expected_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
 
-            REQUIRE_FALSE(result.first_ulp_nudge_exceed);
             REQUIRE(result.total_n_teleports == n_expected_teleports);
             REQUIRE(result.max_tps_exceeded == (n_expected_teleports < n_teleports_success));
             REQUIRE(result.tp_dirs.size() == n_expected_teleports);
             REQUIRE(result.ents.size() == (n_expected_teleports + 1));
-            REQUIRE(result.ulp_diffs_from_portal_plane.size() == (n_expected_teleports + 1));
+            REQUIRE(result.portal_plane_diffs.size() == (n_expected_teleports + 1));
             REQUIRE(result.cum_teleports == std::vector<int>{0, 1, 0, -1}[n_expected_teleports]);
             REQUIRE(result.ents[0] == params.ent);
             REQUIRE(result.ents.back() == result.ent);
@@ -326,26 +323,29 @@ TEST_CASE("Teleport chain results in VAG")
                     REQUIRE(result.tp_dirs[2] == false);
                     REQUIRE_THAT(result.ents[3].GetCenter().DistToSqr(target_vag_pos),
                                  Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE_FALSE(result.ulp_diffs_from_portal_plane[3].Valid());
+                    REQUIRE_FALSE(!!result.portal_plane_diffs[3].is_valid);
                     [[fallthrough]];
                 case 2:
                     REQUIRE(result.tp_dirs[1] == false);
                     REQUIRE_THAT(result.ents[2].GetCenter().DistToSqr(pp.orange.pos),
                                  Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE(result.ulp_diffs_from_portal_plane[2].ax == 0);
-                    REQUIRE_FALSE(result.ulp_diffs_from_portal_plane[2].PtWasBehindPlane());
+                    REQUIRE(!!result.portal_plane_diffs[2].is_valid);
+                    REQUIRE(result.portal_plane_diffs[2].ax == 0);
+                    REQUIRE_FALSE(!!result.portal_plane_diffs[2].pt_was_behind_portal);
                     [[fallthrough]];
                 case 1:
                     REQUIRE(result.tp_dirs[0] == true);
                     REQUIRE_THAT(result.ents[1].GetCenter().DistToSqr(pp.blue.pos), Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE(result.ulp_diffs_from_portal_plane[1].ax == 0);
-                    REQUIRE(result.ulp_diffs_from_portal_plane[1].PtWasBehindPlane());
+                    REQUIRE(!!result.portal_plane_diffs[1].is_valid);
+                    REQUIRE(result.portal_plane_diffs[1].ax == 0);
+                    REQUIRE(!!result.portal_plane_diffs[1].pt_was_behind_portal);
                     [[fallthrough]];
                 case 0:
                     REQUIRE_THAT(result.ents[0].GetCenter().DistToSqr(pp.orange.pos),
                                  Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE(result.ulp_diffs_from_portal_plane[0].ax == 0);
-                    REQUIRE(result.ulp_diffs_from_portal_plane[0].PtWasBehindPlane());
+                    REQUIRE(!!result.portal_plane_diffs[0].is_valid);
+                    REQUIRE(result.portal_plane_diffs[0].ax == 0);
+                    REQUIRE(!!result.portal_plane_diffs[0].pt_was_behind_portal);
                     break;
                 default:
                     FAIL();
@@ -373,7 +373,7 @@ TEST_CASE("Teleport chain results in 5 teleports")
         &pp,
         Entity::CreatePlayerFromCenter(Vector{-127.96876f, -191.24300f, 182.03125f}, true),
     };
-    params.nudge_to_first_portal_plane = true;
+    params.project_to_first_portal_plane = true;
     params.record_flags = TCRF_RECORD_ALL;
     TeleportChainResult result;
 
@@ -388,12 +388,11 @@ TEST_CASE("Teleport chain results in 5 teleports")
             GenerateTeleportChain(params, result);
             int n_expected_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
 
-            REQUIRE_FALSE(result.first_ulp_nudge_exceed);
             REQUIRE(result.total_n_teleports == n_expected_teleports);
             REQUIRE(result.max_tps_exceeded == (n_expected_teleports < n_teleports_success));
             REQUIRE(result.tp_dirs.size() == n_expected_teleports);
             REQUIRE(result.ents.size() == (n_expected_teleports + 1));
-            REQUIRE(result.ulp_diffs_from_portal_plane.size() == (n_expected_teleports + 1));
+            REQUIRE(result.portal_plane_diffs.size() == (n_expected_teleports + 1));
             REQUIRE(result.cum_teleports == std::vector<int>{0, 1, 0, -1, 0, 1}[n_expected_teleports]);
             REQUIRE(result.ents[0] == params.ent);
             REQUIRE(result.ents.back() == result.ent);
@@ -402,39 +401,45 @@ TEST_CASE("Teleport chain results in 5 teleports")
                 case 5:
                     REQUIRE(result.tp_dirs[4] == true);
                     REQUIRE_THAT(result.ents[5].GetCenter().DistToSqr(pp.blue.pos), Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE(result.ulp_diffs_from_portal_plane[5].ax == 0);
-                    REQUIRE_FALSE(result.ulp_diffs_from_portal_plane[5].PtWasBehindPlane());
+                    REQUIRE(result.portal_plane_diffs[5].is_valid);
+                    REQUIRE(result.portal_plane_diffs[5].ax == 0);
+                    REQUIRE_FALSE(result.portal_plane_diffs[5].pt_was_behind_portal);
                     [[fallthrough]];
                 case 4:
                     REQUIRE(result.tp_dirs[3] == true);
                     REQUIRE_THAT(result.ents[4].GetCenter().DistToSqr(pp.orange.pos),
                                  Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE(result.ulp_diffs_from_portal_plane[4].PtWasBehindPlane());
+                    REQUIRE(!!result.portal_plane_diffs[4].is_valid);
+                    REQUIRE(result.portal_plane_diffs[4].ax == 0);
+                    REQUIRE(!!result.portal_plane_diffs[4].pt_was_behind_portal);
                     [[fallthrough]];
                 case 3:
                     REQUIRE(result.tp_dirs[2] == false);
                     REQUIRE_THAT(result.ents[3].GetCenter().DistToSqr(target_vag_pos),
                                  Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE_FALSE(result.ulp_diffs_from_portal_plane[3].Valid());
+                    REQUIRE_FALSE(!!result.portal_plane_diffs[3].is_valid);
                     [[fallthrough]];
                 case 2:
                     REQUIRE(result.tp_dirs[1] == false);
                     REQUIRE_THAT(result.ents[2].GetCenter().DistToSqr(pp.orange.pos),
                                  Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE(result.ulp_diffs_from_portal_plane[2].ax == 0);
-                    REQUIRE(result.ulp_diffs_from_portal_plane[2].PtWasBehindPlane());
+                    REQUIRE(!!result.portal_plane_diffs[2].is_valid);
+                    REQUIRE(result.portal_plane_diffs[2].ax == 0);
+                    REQUIRE(!!result.portal_plane_diffs[2].pt_was_behind_portal);
                     [[fallthrough]];
                 case 1:
                     REQUIRE(result.tp_dirs[0] == true);
                     REQUIRE_THAT(result.ents[1].GetCenter().DistToSqr(pp.blue.pos), Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE(result.ulp_diffs_from_portal_plane[1].ax == 0);
-                    REQUIRE(result.ulp_diffs_from_portal_plane[1].PtWasBehindPlane());
+                    REQUIRE(!!result.portal_plane_diffs[1].is_valid);
+                    REQUIRE(result.portal_plane_diffs[1].ax == 0);
+                    REQUIRE(!!result.portal_plane_diffs[1].pt_was_behind_portal);
                     [[fallthrough]];
                 case 0:
                     REQUIRE_THAT(result.ents[0].GetCenter().DistToSqr(pp.orange.pos),
                                  Catch::Matchers::WithinAbs(0, .5f));
-                    REQUIRE(result.ulp_diffs_from_portal_plane[0].ax == 0);
-                    REQUIRE(result.ulp_diffs_from_portal_plane[0].PtWasBehindPlane());
+                    REQUIRE(!!result.portal_plane_diffs[0].is_valid);
+                    REQUIRE(result.portal_plane_diffs[0].ax == 0);
+                    REQUIRE(!!result.portal_plane_diffs[0].pt_was_behind_portal);
                     break;
                 default:
                     FAIL();
@@ -461,7 +466,7 @@ TEST_CASE("Finite teleport chain results in free edicts")
         &pp,
         Entity::CreatePlayerFromCenter(Vector{-127.96876f, -191.24300f, 182.03125f}, true),
     };
-    params.nudge_to_first_portal_plane = true;
+    params.project_to_first_portal_plane = true;
     params.n_max_teleports = 200;
     params.record_flags = TCRF_RECORD_ALL;
     TeleportChainResult result;
@@ -470,11 +475,10 @@ TEST_CASE("Finite teleport chain results in free edicts")
 
     REQUIRE(result.total_n_teleports == 82);
     REQUIRE(result.cum_teleports == 0);
-    REQUIRE_FALSE(result.first_ulp_nudge_exceed);
     REQUIRE_FALSE(result.max_tps_exceeded);
     REQUIRE(result.tp_dirs.size() == 82);
-    REQUIRE(result.ulp_diffs_from_portal_plane.size() == 83);
-    REQUIRE(result.ulp_diffs_from_portal_plane.back().PtWasBehindPlane());
+    REQUIRE(result.portal_plane_diffs.size() == 83);
+    REQUIRE(result.portal_plane_diffs.back().pt_was_behind_portal);
 }
 
 TEST_CASE("19 Lochness")
@@ -491,6 +495,7 @@ TEST_CASE("19 Lochness")
         &pp,
         Entity::CreatePlayerFromOrigin(Vector{-416.247498f, 735.368835f, 219.97f}, false),
     };
+    params.project_to_first_portal_plane = false;
 
     TeleportChainResult result;
     GenerateTeleportChain(params, result);
@@ -500,7 +505,6 @@ TEST_CASE("19 Lochness")
     REQUIRE(result.total_n_teleports == 3);
     REQUIRE(result.cum_teleports == -1);
     REQUIRE_FALSE(result.max_tps_exceeded);
-    REQUIRE_FALSE(result.first_ulp_nudge_exceed);
     REQUIRE(result.ent.is_player);
     REQUIRE(result.ent.player.crouched);
     REQUIRE_THAT(std::sqrtf(result.ent.GetCenter().DistToSqr(roughExpectedEnt.GetCenter())),
@@ -521,6 +525,7 @@ TEST_CASE("E01 AAG")
         &pp,
         Entity::CreatePlayerFromOrigin(Vector{-136.239883, 726.482483, -240.416977}, false),
     };
+    params.project_to_first_portal_plane = false;
 
     TeleportChainResult result;
     GenerateTeleportChain(params, result);
@@ -530,7 +535,6 @@ TEST_CASE("E01 AAG")
     REQUIRE(result.total_n_teleports == 3);
     REQUIRE(result.cum_teleports == -1);
     REQUIRE_FALSE(result.max_tps_exceeded);
-    REQUIRE_FALSE(result.first_ulp_nudge_exceed);
     REQUIRE(result.ent.is_player);
     REQUIRE(result.ent.player.crouched);
     REQUIRE_THAT(std::sqrtf(result.ent.GetCenter().DistToSqr(roughExpectedEnt.GetCenter())),
@@ -557,6 +561,7 @@ TEST_CASE("00 AAG")
         &pp,
         Entity::CreatePlayerFromOrigin(Vector{-473.604370f, -1082.235498f, 128.031250f}, false),
     };
+    params.project_to_first_portal_plane = false;
 
     TeleportChainResult result;
     GenerateTeleportChain(params, result);
@@ -566,7 +571,6 @@ TEST_CASE("00 AAG")
     REQUIRE(result.total_n_teleports == 3);
     REQUIRE(result.cum_teleports == -1);
     REQUIRE_FALSE(result.max_tps_exceeded);
-    REQUIRE_FALSE(result.first_ulp_nudge_exceed);
     REQUIRE(result.ent.is_player);
     REQUIRE(result.ent.player.crouched);
     REQUIRE_THAT(std::sqrtf(result.ent.GetCenter().DistToSqr(roughExpectedEnt.GetCenter())),
@@ -694,13 +698,6 @@ TEST_CASE("SPT with IPC")
         */
         if (blue.pos.DistToSqr(orange.pos) < 500 * 500)
             continue;
-        bool closeToZero = false;
-        for (int i = 0; i < 2 && !closeToZero; i++)
-            for (int j = 0; j < 3 && closeToZero; j++)
-                if (fabsf((i == 0 ? blue.pos : orange.pos)[j]) < 0.5f)
-                    closeToZero = true;
-        if (closeToZero)
-            continue; // don't use portals where the nudges might take a really long time
 
         PortalPair pp{blue, orange};
         pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
@@ -708,7 +705,7 @@ TEST_CASE("SPT with IPC")
         params.pp = &pp;
         params.ent = Entity::CreatePlayerFromCenter(blue.pos, true);
         params.n_max_teleports = 3;
-        params.nudge_to_first_portal_plane = true;
+        params.project_to_first_portal_plane = true;
 
         GenerateTeleportChain(params, result);
 

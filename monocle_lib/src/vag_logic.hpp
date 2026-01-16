@@ -16,67 +16,24 @@ class GvGen;
 * ulps a point would need to be nudged along the largest portal normal component until the point is
 * exactly behind the portal.
 * 
-*  v behind v          v in front v
-* +1        0 |->     -1         -2
-*           ^ portal plane
+* v behind v         v in front v
+* 1        0 |->     1         2
+*            ^ portal plane
 */
-struct VecUlpDiff {
-    uint32_t ax : 2;            // [0, 2] - the axis along which the difference is measured
-    int diff : 29;              // the difference in ulps
-    uint32_t diff_overflow : 1; // if set, the number of nudges exceeded a limit
-
-    VecUlpDiff()
-    {
-        Reset();
-    }
-
-    void Reset()
-    {
-        ax = 3;
-        diff = 0;
-        diff_overflow = 0;
-    }
-
-    void Update(int along, int by)
-    {
-        assert(ax == 3 || along == (int)ax || by == 0);
-        ax = along;
-        diff += by;
-    }
-
-    void SetInvalid()
-    {
-        ax = 3;
-    }
-
-    bool Valid() const
-    {
-        return ax != 3;
-    }
-
-    bool PtWasBehindPlane() const
-    {
-        assert(Valid());
-        return diff >= 0;
-    }
+struct PointToPortalPlaneUlpDist {
+    uint32_t n_ulps;
+    uint32_t ax : 2;
+    uint32_t pt_was_behind_portal : 1;
+    uint32_t is_valid : 1;
 };
 
-/*
-* Calculates how many ulp nudges were needed to move the given entity until it's behind the portal
-* plane as determined by Portal::ShouldTeleport(). If the point is already behind, nudges are done
-* in the direction of the portal normal so long as ShouldTeleport returns true. If n_max_nudges is
-* exceeded, the diff will have diff_overflow set and the returned entity is undefined.
-*/
-std::pair<Entity, VecUlpDiff> NudgeEntityBehindPortalPlane(const Entity& ent,
-                                                           const Portal& portal,
-                                                           size_t n_max_nudges = 1000);
+std::pair<Entity, PointToPortalPlaneUlpDist> ProjectEntityToPortalPlane(const Entity& ent, const Portal& portal);
 
 // opt-in flags for stuff that's recorded for every teleport
 enum TeleportChainRecordFlags : uint32_t {
     TCRF_NONE = 0,
     TCRF_RECORD_ENTITY = 1 << 0,
-    // do not use for LAG/AAG - those teleport the player center far away from the portal plane
-    TCRF_RECORD_ULP_DIFFS = 1 << 1,
+    TCRF_RECORD_PLANE_DIFFS = 1 << 1,
     TCRF_RECORD_TP_DIRS = 1 << 2,
 
     TCRF_RECORD_ALL = ~0u,
@@ -91,10 +48,9 @@ struct TeleportChainParams {
     /*
     * If true, the entity will be nudged until it is "1 ulp" behind the portal plane (along the
     * largest axis of the portal normal). Otherwise, an entity in front of the portal will not
-    * be teleported at all. If this is true, the entity should be really close to the portal
-    * plane to begin with.
+    * be teleported at all.
     */
-    bool nudge_to_first_portal_plane = false;
+    bool project_to_first_portal_plane = true;
     /*
     * In the map where these portals exist, is the map origin inbounds?
     * 
@@ -108,15 +64,6 @@ struct TeleportChainParams {
     uint32_t record_flags = TCRF_RECORD_ENTITY | TCRF_RECORD_TP_DIRS;
     // limit the maximum number of teleports that the chain can do
     size_t n_max_teleports = 10;
-    /*
-    * If nudge_to_first_portal_plane=true, this is the maximum number of nudges done only for the
-    * first portal. If the max number of nudge is exceeded, first_ulp_nudge_exceed will be true in
-    * the result struct and no teleports will be done.
-    * 
-    * If TCRF_RECORD_ULP_DIFFS is set, this is the maximum number of nudges done at each teleport
-    * where the entity is at a portal boundary (cum_tp == 0 || cum_tp == 1).
-    */
-    size_t n_max_ulp_nudges = 100;
 
     // PImpl for internal state
     struct InternalState;
@@ -151,11 +98,6 @@ struct TeleportChainResult {
     * only be accurate up to params.n_max_teleports number of teleports.
     */
     bool max_tps_exceeded;
-    /*
-    * If set, params.nudge_to_first_portal_plane was set and more than n_max_ulp_nudges were
-    * required to move the entity to the first portal plane; the rest of the fields are undefined.
-    */
-    bool first_ulp_nudge_exceed;
     // the total number of teleports done by both portals
     size_t total_n_teleports;
     /*
@@ -169,16 +111,16 @@ struct TeleportChainResult {
     /*
     * If params.flags has TCRF_RECORD_ENTITY, this has the entity position at each step (including
     * the position before any teleports and the final position), has total_n_teleports+1 elements.
-    * If params.nudge_to_first_portal_plane is true, the first element will be the entity *after*
+    * If params.project_to_first_portal_plane is true, the first element will be the entity *after*
     * the nudge towards the portal and the other elements will not be nudged.
     */
     std::vector<Entity> ents;
     /*
-    * If params.flags has TCRF_RECORD_ULP_DIFFS, this has the "distance in ulps" to the nearby
-    * portal plane. The ulp diffs are only recorded when the entity is on a portal plane (cum
-    * teleports is 0 or 1), otherwise the diff is set to invalid. Has total_n_teleports+1 elements.
+    * If params.flags has TCRF_RECORD_PLANE_DIFFS, this has the "distance in ulps" to the nearby
+    * portal plane. The diffs are only recorded when the entity is on a portal plane (cum teleports
+    * is 0 or 1), otherwise the diff is set to invalid. Has total_n_teleports + 1 elements.
     */
-    std::vector<VecUlpDiff> ulp_diffs_from_portal_plane;
+    std::vector<PointToPortalPlaneUlpDist> portal_plane_diffs;
     /*
     * If params.flags has TCRF_RECORD_TP_DIRS, this records which portals did each teleport. True
     * for primary (first) portal, false otherwise. Has total_n_teleports elements.

@@ -6,39 +6,47 @@
 #include <format>
 
 #include "vag_logic.hpp"
+#include "ulp_diff.hpp"
 
-std::pair<Entity, VecUlpDiff> NudgeEntityBehindPortalPlane(const Entity& ent, const Portal& portal, size_t n_max_nudges)
+std::pair<Entity, PointToPortalPlaneUlpDist> ProjectEntityToPortalPlane(const Entity& ent, const Portal& portal)
 {
-    int nudge_axis = 0;
-    float biggest = -INFINITY;
-    for (int i = 0; i < 3; i++) {
-        if (fabsf(portal.plane.n[i]) > biggest) {
-            biggest = fabsf(portal.plane.n[i]);
-            nudge_axis = i;
-        }
+    const VPlane& plane = portal.plane;
+
+    uint32_t ax = 0;
+    for (int i = 1; i < 3; i++)
+        if (std::fabsf(plane.n[i]) > std::fabsf(plane.n[ax]))
+            ax = i;
+
+    Vector old_center = ent.GetCenter();
+    Entity proj_ent = ent;
+    float& new_ax_val = proj_ent.GetPosRef()[ax]; // the component we're nudging
+    float old_ax_val = new_ax_val;
+    /*
+    * plane: ax+by+cz=d, center: <i,j,k>
+    * If e.g. we're projecting along the x-axis, then: x = (d-by-cz)/a = old_x + (d - plane*center) / a.
+    * We're trying to project the ent center onto the plane, but for e.g. the player we must adjust
+    * the origin, so use the difference of centers to adjust PosRef.
+    */
+    float new_center_ax_val = (float)(old_center[ax] + (plane.d - plane.n.Dot(old_center)) / plane.n[ax]);
+    new_ax_val += new_center_ax_val - old_center[ax];
+    /*
+    * Mathematically, the entity is on the plane now. But we want to make sure it's as close as
+    * possible. Move along the plane normal until we're in front, then move back.
+    */
+    for (int same_as_plane_norm = 1; same_as_plane_norm >= 0; same_as_plane_norm--) {
+        float nudge_towards = !!same_as_plane_norm == std::signbit(plane.n[ax]) ? -INFINITY : INFINITY;
+        while (portal.ShouldTeleport(proj_ent, false) == !!same_as_plane_norm)
+            new_ax_val = std::nextafterf(new_ax_val, nudge_towards);
     }
-    VecUlpDiff ulp_diff{};
 
-    Entity nudged_ent = ent;
-
-    for (int i = 0; i < 2; i++) {
-        Vector& ent_pos = nudged_ent.GetPosRef();
-        float nudge_towards = ent_pos[nudge_axis] + portal.plane.n[nudge_axis] * (i ? -10000.f : 10000.f);
-        int ulp_diff_incr = i ? -1 : 1;
-        size_t n_nudges = 0;
-
-        while (portal.ShouldTeleport(nudged_ent, false) != (bool)i && n_nudges++ < n_max_nudges) {
-            ent_pos[nudge_axis] = std::nextafterf(ent_pos[nudge_axis], nudge_towards);
-            ulp_diff.Update(nudge_axis, ulp_diff_incr);
-        }
-
-        // prevent infinite loop
-        if (n_nudges >= n_max_nudges) {
-            ulp_diff.diff_overflow = 1;
-            return {nudged_ent, ulp_diff};
-        }
-    }
-    return {nudged_ent, ulp_diff};
+    uint32_t ulp_diff = mon::ulp::UlpDiffF(new_ax_val, old_ax_val);
+    PointToPortalPlaneUlpDist dist_info{
+        .n_ulps = ulp_diff,
+        .ax = ax,
+        .pt_was_behind_portal = ulp_diff == 0 || std::signbit(new_ax_val - old_ax_val) == std::signbit(plane.n[ax]),
+        .is_valid = true,
+    };
+    return {proj_ent, dist_info};
 }
 
 using CHAIN_DEFS = TeleportChainParams::InternalStateDefs;
@@ -103,12 +111,11 @@ struct GenerateTeleportChainImpl {
         // clear result
 
         result.max_tps_exceeded = false;
-        result.first_ulp_nudge_exceed = false;
         result.total_n_teleports = 0;
         result.cum_teleports = 0;
         result.ent = usrParams.ent;
         result.ents.clear();
-        result.ulp_diffs_from_portal_plane.clear();
+        result.portal_plane_diffs.clear();
         result.tp_dirs.clear();
     }
 
@@ -246,20 +253,17 @@ struct GenerateTeleportChainImpl {
 
         int dgPlaneSide = 0;
 
-        if (usrParams.record_flags & TCRF_RECORD_ULP_DIFFS) {
-            VecUlpDiff ulp_diff{};
+        if (usrParams.record_flags & TCRF_RECORD_PLANE_DIFFS) {
+            PointToPortalPlaneUlpDist plane_dist{.is_valid = false};
             if (result.cum_teleports == 0 || result.cum_teleports == 1) {
-                auto& p_ulp_diff_from = (result.cum_teleports == 0) == usrParams.first_tp_from_blue
+                auto& p_plane_diff_from = (result.cum_teleports == 0) == usrParams.first_tp_from_blue
                                           ? usrParams.pp->blue
                                           : usrParams.pp->orange;
-                auto [_, ud] = NudgeEntityBehindPortalPlane(result.ent, p_ulp_diff_from);
-                ulp_diff = ud;
-                if (ulp_diff.Valid())
-                    dgPlaneSide = ulp_diff.PtWasBehindPlane() ? -1 : 1;
-            } else {
-                ulp_diff.SetInvalid();
+                plane_dist = ProjectEntityToPortalPlane(result.ent, p_plane_diff_from).second;
+                if (plane_dist.is_valid)
+                    dgPlaneSide = plane_dist.pt_was_behind_portal ? -1 : 1;
             }
-            result.ulp_diffs_from_portal_plane.push_back(ulp_diff);
+            result.portal_plane_diffs.push_back(plane_dist);
         }
 
         if (result.dg)
@@ -293,22 +297,13 @@ void GenerateTeleportChain(const TeleportChainParams& params, TeleportChainResul
     if (result.dg)
         result.dg->ResetAndPushRootNode(params.first_tp_from_blue);
 
-    if ((params.record_flags & TCRF_RECORD_ULP_DIFFS) || params.nudge_to_first_portal_plane) {
-        auto [nudged_ent, ulp_diff] =
-            NudgeEntityBehindPortalPlane(result.ent,
-                                         params.first_tp_from_blue ? params.pp->blue : params.pp->orange,
-                                         params.n_max_ulp_nudges);
-        if (params.nudge_to_first_portal_plane) {
-            if (ulp_diff.diff_overflow) {
-                result.first_ulp_nudge_exceed = true;
-                if (result.dg)
-                    result.dg->Finish();
-                return;
-            }
+    if ((params.record_flags & TCRF_RECORD_PLANE_DIFFS) || params.project_to_first_portal_plane) {
+        auto [nudged_ent, plane_diff] =
+            ProjectEntityToPortalPlane(result.ent, params.first_tp_from_blue ? params.pp->blue : params.pp->orange);
+        if (params.project_to_first_portal_plane)
             result.ent = nudged_ent;
-        }
-        if (params.record_flags & TCRF_RECORD_ULP_DIFFS)
-            result.ulp_diffs_from_portal_plane.push_back(ulp_diff);
+        if (params.record_flags & TCRF_RECORD_PLANE_DIFFS)
+            result.portal_plane_diffs.push_back(plane_diff);
     }
 
     if (params.record_flags & TCRF_RECORD_ENTITY)

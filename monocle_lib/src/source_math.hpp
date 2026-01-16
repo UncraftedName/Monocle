@@ -60,7 +60,7 @@ struct Vector {
 #else
     Vector() {}
 #endif
-    constexpr Vector(float v) : x{v}, y{v}, z{v} {}
+    constexpr explicit Vector(float v) : x{v}, y{v}, z{v} {}
     constexpr Vector(float x, float y, float z) : x{x}, y{y}, z{z} {}
 
     void print() const

@@ -151,7 +151,6 @@ struct SearchSpace {
             params.ent = tp_player ? Entity::CreatePlayerFromCenter(ent_pos, true) : Entity::CreateBall(ent_pos, 1.f);
             params.n_max_teleports = 3;
             params.first_tp_from_blue = tp_from_blue;
-            params.nudge_to_first_portal_plane = true;
             params.map_origin_inbounds = false;
 
             GenerateTeleportChain(params, st.chain_result);
@@ -167,8 +166,6 @@ struct SearchSpace {
                     printf("%d cum teleports\n\n", st.chain_result.cum_teleports);
             }
 
-            if (st.chain_result.first_ulp_nudge_exceed)
-                continue;
             if (st.chain_result.max_tps_exceeded)
                 continue;
             if (st.chain_result.cum_teleports != -1)
