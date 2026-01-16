@@ -21,7 +21,7 @@
 
 int main(int argc, char* argv[])
 {
-    mon::SyncFloatingPointControlWord();
+    mon::MonocleFloatingPointScope scope{};
     Catch::Session session;
     session.libIdentify();
     session.configData().rngSeed = CATCH_SEED;

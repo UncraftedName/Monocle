@@ -18,16 +18,27 @@ constexpr float PORTAL_HALF_WIDTH = 32.f;
 constexpr float PORTAL_HALF_HEIGHT = 54.f;
 constexpr float PORTAL_HOLE_DEPTH = 500.f;
 
-inline void SyncFloatingPointControlWord()
-{
-    // 0x9001f (default msvc settings) - mask all exceptions, near rounding, 53 bit mantissa precision, projective infinity
-    errno_t err =
-        _controlfp_s(nullptr,
-                     (_EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW | _EM_ZERODIVIDE | _EM_INVALID | _EM_DENORMAL) |
-                         (_RC_NEAR | _PC_53 | _IC_PROJECTIVE),
-                     ~0u);
-    MON_ASSERT(!err);
-}
+// sets FPU flags to what the game uses, setup before using any monocle code
+class MonocleFloatingPointScope {
+    unsigned int old_control;
+
+public:
+    MonocleFloatingPointScope()
+    {
+        // 0x9001f (default msvc settings) - mask all exceptions, near rounding, 53 bit mantissa precision, projective infinity
+        unsigned int new_control =
+            (_EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW | _EM_ZERODIVIDE | _EM_INVALID | _EM_DENORMAL) |
+            (_RC_NEAR | _PC_53 | _IC_PROJECTIVE);
+        errno_t err = _controlfp_s(&old_control, new_control, ~0u);
+        MON_ASSERT(!err);
+    }
+
+    ~MonocleFloatingPointScope()
+    {
+        errno_t err = _controlfp_s(nullptr, old_control, ~0u);
+        MON_ASSERT(!err);
+    }
+};
 
 #ifndef NDEBUG
 #define DEBUG_NAN_CTORS

@@ -642,7 +642,7 @@ static void FindKnownVagIn11()
 
 int main()
 {
-    mon::SyncFloatingPointControlWord();
+    mon::MonocleFloatingPointScope scope{};
 
     FindKnownVagIn11();
 }
