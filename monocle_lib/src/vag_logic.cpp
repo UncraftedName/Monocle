@@ -49,32 +49,12 @@ std::pair<Entity, PointToPortalPlaneUlpDist> ProjectEntityToPortalPlane(const En
     return {proj_ent, dist_info};
 }
 
-using CHAIN_DEFS = TeleportChainParams::InternalStateDefs;
-
-struct TeleportChainParams::InternalState {
-    /*
-    * CPortalTouchScope::m_CallQueue. Holds values representing:
-    * - FUNC_TP_BLUE: a blue teleport
-    * - FUNC_TP_ORANGE: an orange teleport
-    * - FUNC_RECHECK_COLLISION: RecheckEntityCollision
-    * - negative values: a null
-    */
-    CHAIN_DEFS::queue_type tp_queue;
-    // total number of nulls queued so far, only for debugging
-    CHAIN_DEFS::queue_entry n_queued_nulls;
-    int touch_scope_depth; // CPortalTouchScope::m_nDepth, not fully implemented
-
-    CHAIN_DEFS::portal_type owning_portal;
-};
-
 TeleportChainParams::TeleportChainParams(const PortalPair* pp, Entity ent)
     : pp(pp),
       ent(ent),
       first_tp_from_blue(pp ? (pp->blue.pos.DistToSqr(ent.GetCenter()) < pp->orange.pos.DistToSqr(ent.GetCenter()))
                             : true)
 {}
-
-TeleportChainParams::~TeleportChainParams() {}
 
 /*
 * This is a simplified replicate of the game's logic for teleporting stuff. The source is in e.g.
@@ -90,13 +70,13 @@ TeleportChainParams::~TeleportChainParams() {}
 struct GenerateTeleportChainImpl {
 
     const TeleportChainParams& usrParams;
-    TeleportChainParams::InternalState& st;
+    TeleportChainInternalState& st;
     TeleportChainResult& result;
 
+    using DEFS = TeleportChainInternalState;
+
     GenerateTeleportChainImpl(const TeleportChainParams& params, TeleportChainResult& result)
-        : usrParams(params),
-          st(params._st ? *params._st : *(params._st = std::make_unique<TeleportChainParams::InternalState>())),
-          result(result)
+        : usrParams(params), st(result._st), result(result)
     {}
 
     void ResetState()
@@ -106,7 +86,7 @@ struct GenerateTeleportChainImpl {
         st.tp_queue.clear();
         st.n_queued_nulls = 0;
         st.touch_scope_depth = 0;
-        st.owning_portal = usrParams.first_tp_from_blue ? CHAIN_DEFS::FUNC_TP_BLUE : CHAIN_DEFS::FUNC_TP_ORANGE;
+        st.owning_portal = usrParams.first_tp_from_blue ? DEFS::FUNC_TP_BLUE : DEFS::FUNC_TP_ORANGE;
 
         // clear result
 
@@ -119,25 +99,25 @@ struct GenerateTeleportChainImpl {
         result.tp_dirs.clear();
     }
 
-    template <CHAIN_DEFS::portal_type PORTAL>
-    static constexpr CHAIN_DEFS::portal_type OppositePortalType()
+    template <DEFS::portal_type PORTAL>
+    static constexpr DEFS::portal_type OppositePortalType()
     {
-        if constexpr (PORTAL == CHAIN_DEFS::FUNC_TP_BLUE)
-            return CHAIN_DEFS::FUNC_TP_ORANGE;
+        if constexpr (PORTAL == DEFS::FUNC_TP_BLUE)
+            return DEFS::FUNC_TP_ORANGE;
         else
-            return CHAIN_DEFS::FUNC_TP_BLUE;
+            return DEFS::FUNC_TP_BLUE;
     }
 
-    template <CHAIN_DEFS::portal_type PORTAL>
+    template <DEFS::portal_type PORTAL>
     inline bool PortalIsPrimary()
     {
-        return usrParams.first_tp_from_blue == (PORTAL == CHAIN_DEFS::FUNC_TP_BLUE);
+        return usrParams.first_tp_from_blue == (PORTAL == DEFS::FUNC_TP_BLUE);
     }
 
-    template <CHAIN_DEFS::portal_type PORTAL>
+    template <DEFS::portal_type PORTAL>
     inline const Portal& GetPortal()
     {
-        return PORTAL == CHAIN_DEFS::FUNC_TP_BLUE ? usrParams.pp->blue : usrParams.pp->orange;
+        return PORTAL == DEFS::FUNC_TP_BLUE ? usrParams.pp->blue : usrParams.pp->orange;
     }
 
     void CallQueued()
@@ -147,22 +127,22 @@ struct GenerateTeleportChainImpl {
 
         st.tp_queue.push_back(-++st.n_queued_nulls);
 
-        if (result.dg) {
-            result.dg->PushCallQueuedNode(st.tp_queue);
-            result.dg->SetLastTeleportCallQueuedTeleport(false);
+        if (result.graphviz) {
+            result.graphviz->PushCallQueuedNode(st.tp_queue);
+            result.graphviz->SetLastTeleportCallQueuedTeleport(false);
         }
 
         for (bool dequeued_null = false; !dequeued_null && !result.max_tps_exceeded;) {
             int val = st.tp_queue.front();
             st.tp_queue.pop_front();
             switch (val) {
-                case CHAIN_DEFS::FUNC_RECHECK_COLLISION:
+                case DEFS::FUNC_RECHECK_COLLISION:
                     break;
-                case CHAIN_DEFS::FUNC_TP_BLUE:
-                    TeleportEntity<CHAIN_DEFS::FUNC_TP_BLUE>();
+                case DEFS::FUNC_TP_BLUE:
+                    TeleportEntity<DEFS::FUNC_TP_BLUE>();
                     break;
-                case CHAIN_DEFS::FUNC_TP_ORANGE:
-                    TeleportEntity<CHAIN_DEFS::FUNC_TP_ORANGE>();
+                case DEFS::FUNC_TP_ORANGE:
+                    TeleportEntity<DEFS::FUNC_TP_ORANGE>();
                     break;
                 default:
                     MON_ASSERT(val < 0);
@@ -170,32 +150,32 @@ struct GenerateTeleportChainImpl {
                     break;
             }
         }
-        if (result.dg)
-            result.dg->PopNode();
+        if (result.graphviz)
+            result.graphviz->PopNode();
     }
 
-    template <CHAIN_DEFS::portal_type PORTAL>
+    template <DEFS::portal_type PORTAL>
     void ReleaseOwnershipOfEntity(bool moving_to_linked)
     {
         if (PORTAL != st.owning_portal)
             return;
-        st.owning_portal = CHAIN_DEFS::PORTAL_NONE;
+        st.owning_portal = DEFS::PORTAL_NONE;
         if (st.touch_scope_depth > 0)
             for (int i = 0; i < result.ent.n_children + !moving_to_linked; i++)
-                st.tp_queue.push_back(CHAIN_DEFS::FUNC_RECHECK_COLLISION);
+                st.tp_queue.push_back(DEFS::FUNC_RECHECK_COLLISION);
     }
 
-    template <CHAIN_DEFS::portal_type PORTAL>
+    template <DEFS::portal_type PORTAL>
     bool SharedEnvironmentCheck()
     {
-        if (st.owning_portal == CHAIN_DEFS::PORTAL_NONE || st.owning_portal == PORTAL)
+        if (st.owning_portal == DEFS::PORTAL_NONE || st.owning_portal == PORTAL)
             return true;
         Vector ent_center = result.ent.GetCenter();
         return ent_center.DistToSqr(GetPortal<PORTAL>().pos) <
                ent_center.DistToSqr(GetPortal<OppositePortalType<PORTAL>()>().pos);
     }
 
-    template <CHAIN_DEFS::portal_type PORTAL>
+    template <DEFS::portal_type PORTAL>
     void PortalTouchEntity()
     {
         if (result.max_tps_exceeded)
@@ -207,7 +187,7 @@ struct GenerateTeleportChainImpl {
                     GetPortal<PORTAL>().plane.n.Dot(result.ent.GetCenter()) > GetPortal<PORTAL>().plane.d;
                 bool player_stuck = result.ent.is_player ? !usrParams.map_origin_inbounds : false;
                 if (ent_in_front || player_stuck) {
-                    if (st.owning_portal != PORTAL && st.owning_portal != CHAIN_DEFS::PORTAL_NONE)
+                    if (st.owning_portal != PORTAL && st.owning_portal != DEFS::PORTAL_NONE)
                         ReleaseOwnershipOfEntity<OppositePortalType<PORTAL>()>(false);
                     st.owning_portal = PORTAL;
                 }
@@ -225,27 +205,27 @@ struct GenerateTeleportChainImpl {
             CallQueued();
     }
 
-    template <CHAIN_DEFS::portal_type PORTAL>
+    template <DEFS::portal_type PORTAL>
     void TeleportEntity()
     {
         if (st.touch_scope_depth > 0) {
             st.tp_queue.push_back(PORTAL);
-            if (result.dg)
-                result.dg->SetLastTeleportCallQueuedTeleport(true);
+            if (result.graphviz)
+                result.graphviz->SetLastTeleportCallQueuedTeleport(true);
             return;
         }
 
         if (result.total_n_teleports >= usrParams.n_max_teleports) {
             result.max_tps_exceeded = true;
-            if (result.dg)
-                result.dg->PushExceededTpNode(PORTAL == CHAIN_DEFS::FUNC_TP_BLUE);
+            if (result.graphviz)
+                result.graphviz->PushExceededTpNode(PORTAL == DEFS::FUNC_TP_BLUE);
             return;
         }
 
         ++result.total_n_teleports;
 
         result.cum_teleports += PortalIsPrimary<PORTAL>() ? 1 : -1;
-        result.ent = usrParams.pp->Teleport(result.ent, PORTAL == CHAIN_DEFS::FUNC_TP_BLUE);
+        result.ent = usrParams.pp->Teleport(result.ent, PORTAL == DEFS::FUNC_TP_BLUE);
         if (usrParams.record_flags & TCRF_RECORD_ENTITY)
             result.ents.push_back(result.ent);
         if (usrParams.record_flags & TCRF_RECORD_TP_DIRS)
@@ -266,24 +246,24 @@ struct GenerateTeleportChainImpl {
             result.portal_plane_diffs.push_back(plane_dist);
         }
 
-        if (result.dg)
-            result.dg->PushTeleportNode(PORTAL == CHAIN_DEFS::FUNC_TP_BLUE, result.cum_teleports, dgPlaneSide);
+        if (result.graphviz)
+            result.graphviz->PushTeleportNode(PORTAL == DEFS::FUNC_TP_BLUE, result.cum_teleports, dgPlaneSide);
 
         ReleaseOwnershipOfEntity<PORTAL>(true);
         st.owning_portal = OppositePortalType<PORTAL>();
 
         // do the 4 touch calls
         for (int i = 0; i < 4; i++) {
-            if (result.dg)
-                result.dg->SetTouchCallIndex(i);
+            if (result.graphviz)
+                result.graphviz->SetTouchCallIndex(i);
             if (i == 0 || i == 3)
                 EntityTouchPortal();
             else
                 PortalTouchEntity<OppositePortalType<PORTAL>()>();
         }
 
-        if (result.dg)
-            result.dg->PopNode();
+        if (result.graphviz)
+            result.graphviz->PopNode();
     }
 };
 
@@ -294,8 +274,8 @@ void GenerateTeleportChain(const TeleportChainParams& params, TeleportChainResul
     GenerateTeleportChainImpl impl{params, result};
     impl.ResetState();
 
-    if (result.dg)
-        result.dg->ResetAndPushRootNode(params.first_tp_from_blue);
+    if (result.graphviz)
+        result.graphviz->ResetAndPushRootNode(params.first_tp_from_blue);
 
     if ((params.record_flags & TCRF_RECORD_PLANE_DIFFS) || params.project_to_first_portal_plane) {
         auto [nudged_ent, plane_diff] =
@@ -310,12 +290,12 @@ void GenerateTeleportChain(const TeleportChainParams& params, TeleportChainResul
         result.ents.push_back(result.ent);
 
     if (params.first_tp_from_blue)
-        impl.PortalTouchEntity<CHAIN_DEFS::FUNC_TP_BLUE>();
+        impl.PortalTouchEntity<TeleportChainInternalState::FUNC_TP_BLUE>();
     else
-        impl.PortalTouchEntity<CHAIN_DEFS::FUNC_TP_ORANGE>();
+        impl.PortalTouchEntity<TeleportChainInternalState::FUNC_TP_ORANGE>();
 
-    if (result.dg)
-        result.dg->Finish();
+    if (result.graphviz)
+        result.graphviz->Finish();
 }
 
 std::string TeleportChainResult::CreateDebugString(const TeleportChainParams& params) const

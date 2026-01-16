@@ -10,10 +10,8 @@ static void FormatIndentedLine(GvGen& dg, std::format_string<Args...> fmt, Args&
     dg.buf += '\n';
 }
 
-using CHAIN_DEFS = TeleportChainParams::InternalStateDefs;
-
 struct tp_queue_view {
-    const CHAIN_DEFS::queue_type& queue;
+    const TeleportChainInternalState::queue_type& queue;
 };
 
 template <typename Char>
@@ -24,14 +22,14 @@ struct std::formatter<tp_queue_view, Char> {
         return ctx.begin();
     }
 
-    static Char QueueElemToChar(CHAIN_DEFS::queue_entry qe)
+    static Char QueueElemToChar(TeleportChainInternalState::queue_entry qe)
     {
         switch (qe) {
-            case CHAIN_DEFS::FUNC_TP_BLUE:
+            case TeleportChainInternalState::FUNC_TP_BLUE:
                 return Char('B');
-            case CHAIN_DEFS::FUNC_TP_ORANGE:
+            case TeleportChainInternalState::FUNC_TP_ORANGE:
                 return Char('O');
-            case CHAIN_DEFS::FUNC_RECHECK_COLLISION:
+            case TeleportChainInternalState::FUNC_RECHECK_COLLISION:
                 return Char('R');
             default:
                 MON_ASSERT(qe < 0);
@@ -68,7 +66,7 @@ void GvGen::ResetAndPushRootNode(bool blue)
                        blue ? style.blueCol : style.orangeCol);
 }
 
-void GvGen::PushCallQueuedNode(const CHAIN_DEFS::queue_type& queue)
+void GvGen::PushCallQueuedNode(const TeleportChainInternalState::queue_type& queue)
 {
     int lastNode = node_stack.back();
     int newNode = node_stack.emplace_back(node_counter++);

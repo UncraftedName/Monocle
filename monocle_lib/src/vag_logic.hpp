@@ -39,7 +39,6 @@ enum TeleportChainRecordFlags : uint32_t {
     TCRF_RECORD_ALL = ~0u,
 };
 
-// this struct can (and should) be reused when generating multiple chains
 struct TeleportChainParams {
     // the portals used for the teleport(s)
     const PortalPair* pp;
@@ -65,30 +64,35 @@ struct TeleportChainParams {
     // limit the maximum number of teleports that the chain can do
     size_t n_max_teleports = 10;
 
-    // PImpl for internal state
-    struct InternalState;
-    mutable std::unique_ptr<InternalState> _st;
-
-    // for internal use - have to keep these in the header for gv_gen.cpp
-    struct InternalStateDefs {
-        using queue_entry = int;
-        using queue_type = std::deque<queue_entry>;
-
-        using portal_type = queue_entry;
-        static constexpr queue_entry FUNC_RECHECK_COLLISION = 0;
-        static constexpr portal_type FUNC_TP_BLUE = 1;
-        static constexpr portal_type FUNC_TP_ORANGE = 2;
-        static constexpr portal_type PORTAL_NONE = 0;
-    };
-
-    /*
-    * Annoyingly, to use PImpl this class must define a constructor. This inits the params with
-    * sensible defaults, but every field above is public and can be changed.
-    */
+    // this inits everything with sensible defaults, but every field above is public and can be changed
     TeleportChainParams(const PortalPair* pp, Entity ent);
     TeleportChainParams() : TeleportChainParams(nullptr, Entity{}) {}
+};
 
-    ~TeleportChainParams();
+struct TeleportChainInternalState {
+
+    using queue_entry = int;
+    using queue_type = std::deque<queue_entry>;
+
+    using portal_type = queue_entry;
+    static constexpr queue_entry FUNC_RECHECK_COLLISION = 0;
+    static constexpr portal_type FUNC_TP_BLUE = 1;
+    static constexpr portal_type FUNC_TP_ORANGE = 2;
+    static constexpr portal_type PORTAL_NONE = 0;
+
+    /*
+    * CPortalTouchScope::m_CallQueue. Holds values representing:
+    * - FUNC_TP_BLUE: a blue teleport
+    * - FUNC_TP_ORANGE: an orange teleport
+    * - FUNC_RECHECK_COLLISION: RecheckEntityCollision
+    * - negative values: a null
+    */
+    queue_type tp_queue;
+    // total number of nulls queued so far, only for debugging
+    queue_entry n_queued_nulls;
+    int touch_scope_depth; // CPortalTouchScope::m_nDepth, not fully implemented
+
+    portal_type owning_portal;
 };
 
 // this struct can (and should) be reused when generating multiple chains
@@ -126,8 +130,11 @@ struct TeleportChainResult {
     * for primary (first) portal, false otherwise. Has total_n_teleports elements.
     */
     std::vector<bool> tp_dirs;
-    // an optional pointer (user-supplied), which will record the chain as a graphviz graph
-    GvGen* dg = nullptr;
+    // an optional pointer (user-supplied), which will record the chain as a graphviz DOT graph
+    GvGen* graphviz = nullptr;
+
+    // internal
+    TeleportChainInternalState _st;
 
     /*
     * Create a string that can be printed to stdout for debugging what the chain looks like. This
@@ -170,7 +177,7 @@ public:
 private:
     // clears the state and starts a new graph with the given color for the initial teleport portal
     void ResetAndPushRootNode(bool blue);
-    void PushCallQueuedNode(const TeleportChainParams::InternalStateDefs::queue_type& queue);
+    void PushCallQueuedNode(const TeleportChainInternalState::queue_type& queue);
     // planeSide=-1 -> ShouldTeleport()=true, planeSide=1 -> ShouldTeleport()=false, otherwise ignored
     void PushTeleportNode(bool blue, int cum_teleports, int planeSide);
     void PushExceededTpNode(bool blue);
