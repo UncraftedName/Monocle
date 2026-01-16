@@ -239,7 +239,7 @@ TEST_CASE("Teleport")
     REQUIRE_THAT(ent.GetCenter().DistToSqr(p1_teleporting ? pt2 : pt1), Catch::Matchers::WithinAbs(0.0, 0.01));
 }
 
-TEST_CASE("Nudging point towards portal plane")
+TEST_CASE("Nudging point towards portal plane (close)")
 {
     REPEAT_TEST(10000);
     static small_prng rng;
@@ -264,7 +264,23 @@ TEST_CASE("Nudging point towards portal plane")
     auto [nudged_ent, plane_dist] = ProjectEntityToPortalPlane(ent, p);
     REQUIRE(!!plane_dist.is_valid);
     REQUIRE(p.ShouldTeleport(ent, false) == !!plane_dist.pt_was_behind_portal);
+    // nudged entity is guaranteed to be behind the portal
+    REQUIRE(p.ShouldTeleport(nudged_ent, false));
+    // nudge the entity across the portal boundary
+    Vector& ent_pos = nudged_ent.GetPosRef();
+    float target = ent_pos[plane_dist.ax] + p.plane.n[plane_dist.ax];
+    ent_pos[plane_dist.ax] = std::nextafterf(ent_pos[plane_dist.ax], target);
+    REQUIRE_FALSE(p.ShouldTeleport(nudged_ent, false));
+}
 
+// basically this test shouldn't take forever (the old version of this would take ages)
+TEST_CASE("Nudging point towards portal plane (far)") {
+    static small_prng rng;
+    Portal p = RandomPortal(rng);
+    Entity ent = Entity::CreatePlayerFromCenter(p.pos + p.r * 2.5f - p.u * 1.5f + p.f * 12345.f, false);
+    auto [nudged_ent, plane_dist] = ProjectEntityToPortalPlane(ent, p);
+    REQUIRE(!!plane_dist.is_valid);
+    REQUIRE_FALSE(p.ShouldTeleport(ent, false));
     // nudged entity is guaranteed to be behind the portal
     REQUIRE(p.ShouldTeleport(nudged_ent, false));
     // nudge the entity across the portal boundary
