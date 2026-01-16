@@ -42,7 +42,7 @@ ThiscallToCdeclPostamble MACRO
 ENDM
 
 ; void AngleMatrix(const QAngle* angles, matrix3x4_t* matrix) : server.dll[0x451670]
-AngleMatrix PROC PUBLIC
+MonAsmAngleMatrix PROC PUBLIC
     SUB ESP, 20h
     LEA ECX, [ESP + 8]
     MOV [ESP + 14h], ECX
@@ -138,10 +138,10 @@ AngleMatrix PROC PUBLIC
     FSTP dword ptr [EAX + 2Ch]
     ADD ESP, 20h
     RET
-AngleMatrix ENDP
+MonAsmAngleMatrix ENDP
 
 ; AngleVectors(const QAngle* angles, Vector* f, Vector* r, Vector* u) : server.dll[0x451130]
-AngleVectors PROC PUBLIC
+MonAsmAngleVectors PROC PUBLIC
     SUB ESP, 20h
     LEA ECX, [ESP + 4]
     MOV [ESP + 14h], ECX
@@ -261,10 +261,10 @@ no_u:
     FSTP ST(0)
     ADD ESP, 20h
     RET
-AngleVectors ENDP
+MonAsmAngleVectors ENDP
 
 ; MatrixInverseTR(const VMatrix* src, VMatrix* dst) : server.dll[0x4558e0]
-MatrixInverseTR PROC PUBLIC
+MonAsmMatrixInverseTR PROC PUBLIC
     SUB ESP, 18h
     MOV EAX, [ESP + 1Ch]
     FLD dword ptr [EAX]
@@ -301,7 +301,7 @@ MatrixInverseTR PROC PUBLIC
     PUSH ECX
     FSTP dword ptr [ESP + 14h]
     PUSH ESI
-    CALL Vector3DMultiply
+    CALL MonAsmVector3DMultiply
     FLD dword ptr [ESP + 1Ch]
     FSTP dword ptr [ESI + 0Ch]
     ADD ESP, 0Ch
@@ -318,10 +318,10 @@ MatrixInverseTR PROC PUBLIC
     POP ESI
     ADD ESP, 18h
     RET
-MatrixInverseTR ENDP
+MonAsmMatrixInverseTR ENDP
 
 ; Vector3DMultiply(const VMatrix* src1, const Vector* src2, Vector* dst) : server.dll[0x455780]
-Vector3DMultiply PROC PUBLIC
+MonAsmVector3DMultiply PROC PUBLIC
     MOV EAX, [ESP + 8]
     MOV ECX, [ESP + 0Ch]
     SUB ESP, 18h
@@ -375,12 +375,12 @@ src_not_dst:
     FSTP dword ptr [ECX + 8]
     ADD ESP, 18h
     RET
-Vector3DMultiply ENDP
+MonAsmVector3DMultiply ENDP
 
 ; __cdecl VMatrix__MatrixMul(const VMatrix* lhs, const VMatrix* rhs, VMatrix* out)
 ; This is our implementation of VMatrix::MatrixMul : server.dll[0x454e30],
 ; called by VMatrix::operator* : server.dll[0x4550a0].
-VMatrix__MatrixMul PROC PUBLIC
+MonAsmVMatrix__MatrixMul PROC PUBLIC
     ThiscallToCdeclPreamble
 
     SUB ESP, 20h
@@ -602,12 +602,12 @@ VMatrix__MatrixMul PROC PUBLIC
     ADD ESP, 20h
 
     ThiscallToCdeclPostamble
-VMatrix__MatrixMul ENDP
+MonAsmVMatrix__MatrixMul ENDP
 
 ; Vector VMatrix::operator*(Vector) : server.dll[0x3fe020]
 ; Same hack as above - function is actually __thiscall but we implement:
 ; Vector* __cdecl VMatrix__operatorVec(const VMatrix* lhs, Vector* out, const Vector* vVec)
-VMatrix__operatorVec PROC PUBLIC
+MonAsmVMatrix__operatorVec PROC PUBLIC
     ThiscallToCdeclPreamble
 
     MOV EDX, [ESP + 8]
@@ -644,6 +644,6 @@ VMatrix__operatorVec PROC PUBLIC
     FSTP dword ptr [EAX + 8]
 
     ThiscallToCdeclPostamble
-VMatrix__operatorVec ENDP
+MonAsmVMatrix__operatorVec ENDP
 
 END

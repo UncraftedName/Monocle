@@ -6,6 +6,8 @@
 #include <vector>
 #include <optional>
 
+namespace mon {
+
 struct AABB {
     Vector mins, maxs;
 
@@ -182,3 +184,5 @@ struct SearchSpace {
         return {};
     }
 };
+
+} // namespace mon

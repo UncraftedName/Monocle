@@ -7,6 +7,13 @@
 #include <string>
 #include <math.h>
 
+/*
+* This file replicates common source-engine types. Unless otherwise noted, the functions here
+* should copy the game to floating point precision.
+*/
+
+namespace mon {
+
 #define PORTAL_HALF_WIDTH 32.0f
 #define PORTAL_HALF_HEIGHT 54.0f
 #define PORTAL_HOLE_DEPTH 500.f
@@ -422,3 +429,5 @@ enum PlaneSideResult {
 
 int BoxOnPlaneSide(const Vector& mins, const Vector& maxs, const VPlane& p, plane_bits bits);
 int BallOnPlaneSide(const Vector& c, float r, const VPlane& p);
+
+} // namespace mon

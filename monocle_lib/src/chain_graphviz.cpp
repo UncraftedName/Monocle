@@ -2,8 +2,10 @@
 
 #include <format>
 
+namespace mon {
+
 template <class... Args>
-static void FormatIndentedLine(GvGen& dg, std::format_string<Args...> fmt, Args&&... args)
+static void FormatIndentedLine(GraphvizGen& dg, std::format_string<Args...> fmt, Args&&... args)
 {
     dg.buf += dg.style.indent;
     std::format_to(std::back_inserter(dg.buf), fmt, std::forward<Args>(args)...);
@@ -17,19 +19,21 @@ struct tp_queue_view {
 template <typename Char>
 struct std::formatter<tp_queue_view, Char> {
 
+    using INTERN = mon::TeleportChainInternalState;
+
     constexpr auto parse(std::basic_format_parse_context<Char>& ctx)
     {
         return ctx.begin();
     }
 
-    static Char QueueElemToChar(TeleportChainInternalState::queue_entry qe)
+    static Char QueueElemToChar(INTERN::queue_entry qe)
     {
         switch (qe) {
-            case TeleportChainInternalState::FUNC_TP_BLUE:
+            case INTERN::FUNC_TP_BLUE:
                 return Char('B');
-            case TeleportChainInternalState::FUNC_TP_ORANGE:
+            case INTERN::FUNC_TP_ORANGE:
                 return Char('O');
-            case TeleportChainInternalState::FUNC_RECHECK_COLLISION:
+            case INTERN::FUNC_RECHECK_COLLISION:
                 return Char('R');
             default:
                 MON_ASSERT(qe < 0);
@@ -38,7 +42,7 @@ struct std::formatter<tp_queue_view, Char> {
     }
 
     template <typename FormatContext>
-    auto format(const tp_queue_view& v, FormatContext& ctx) const
+    auto format(const mon::tp_queue_view& v, FormatContext& ctx) const
     {
         auto out = ctx.out();
         for (auto qe : v.queue)
@@ -47,7 +51,7 @@ struct std::formatter<tp_queue_view, Char> {
     }
 };
 
-void GvGen::ResetAndPushRootNode(bool blue)
+void GraphvizGen::ResetAndPushRootNode(bool blue)
 {
     node_stack.clear();
     buf.clear();
@@ -66,7 +70,7 @@ void GvGen::ResetAndPushRootNode(bool blue)
                        blue ? style.blueCol : style.orangeCol);
 }
 
-void GvGen::PushCallQueuedNode(const TeleportChainInternalState::queue_type& queue)
+void GraphvizGen::PushCallQueuedNode(const TeleportChainInternalState::queue_type& queue)
 {
     int lastNode = node_stack.back();
     int newNode = node_stack.emplace_back(node_counter++);
@@ -80,7 +84,7 @@ void GvGen::PushCallQueuedNode(const TeleportChainInternalState::queue_type& que
         last_teleport_call_queued_a_teleport ? style.teleportEdgeAttributes : style.defaultEdgeAttributes);
 }
 
-void GvGen::PushTeleportNode(bool blue, int cum_teleports, int planeSide)
+void GraphvizGen::PushTeleportNode(bool blue, int cum_teleports, int planeSide)
 {
     int lastNode = node_stack.back();
     int newNode = node_stack.emplace_back(node_counter++);
@@ -105,7 +109,7 @@ void GvGen::PushTeleportNode(bool blue, int cum_teleports, int planeSide)
     FormatIndentedLine(*this, "\"{}\" -- \"{}\" [{}];", lastNode, newNode, style.defaultEdgeAttributes);
 }
 
-void GvGen::PushExceededTpNode(bool blue)
+void GraphvizGen::PushExceededTpNode(bool blue)
 {
     int lastNode = node_stack.back();
     int newNode = node_stack.emplace_back(node_counter++);
@@ -115,3 +119,5 @@ void GvGen::PushExceededTpNode(bool blue)
                        blue ? style.blueCol : style.orangeCol);
     FormatIndentedLine(*this, "\"{}\" -- \"{}\" [{}];", lastNode, newNode, style.defaultEdgeAttributes);
 }
+
+} // namespace mon

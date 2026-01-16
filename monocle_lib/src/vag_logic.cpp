@@ -8,6 +8,8 @@
 #include <fstream>
 #include <format>
 
+namespace mon {
+
 std::pair<Entity, PointToPortalPlaneUlpDist> ProjectEntityToPortalPlane(const Entity& ent, const Portal& portal)
 {
     const VPlane& plane = portal.plane;
@@ -39,7 +41,7 @@ std::pair<Entity, PointToPortalPlaneUlpDist> ProjectEntityToPortalPlane(const En
             new_ax_val = std::nextafterf(new_ax_val, nudge_towards);
     }
 
-    uint32_t ulp_diff = mon::ulp::UlpDiffF(new_ax_val, old_ax_val);
+    uint32_t ulp_diff = ulp::UlpDiffF(new_ax_val, old_ax_val);
     PointToPortalPlaneUlpDist dist_info{
         .n_ulps = ulp_diff,
         .ax = ax,
@@ -73,7 +75,7 @@ struct GenerateTeleportChainImpl {
     TeleportChainInternalState& st;
     TeleportChainResult& result;
 
-    using DEFS = TeleportChainInternalState;
+    using INTERN = TeleportChainInternalState;
 
     GenerateTeleportChainImpl(const TeleportChainParams& params, TeleportChainResult& result)
         : usrParams(params), st(result._st), result(result)
@@ -86,7 +88,7 @@ struct GenerateTeleportChainImpl {
         st.tp_queue.clear();
         st.n_queued_nulls = 0;
         st.touch_scope_depth = 0;
-        st.owning_portal = usrParams.first_tp_from_blue ? DEFS::FUNC_TP_BLUE : DEFS::FUNC_TP_ORANGE;
+        st.owning_portal = usrParams.first_tp_from_blue ? INTERN::FUNC_TP_BLUE : INTERN::FUNC_TP_ORANGE;
 
         // clear result
 
@@ -99,25 +101,25 @@ struct GenerateTeleportChainImpl {
         result.tp_dirs.clear();
     }
 
-    template <DEFS::portal_type PORTAL>
-    static constexpr DEFS::portal_type OppositePortalType()
+    template <INTERN::portal_type PORTAL>
+    static constexpr INTERN::portal_type OppositePortalType()
     {
-        if constexpr (PORTAL == DEFS::FUNC_TP_BLUE)
-            return DEFS::FUNC_TP_ORANGE;
+        if constexpr (PORTAL == INTERN::FUNC_TP_BLUE)
+            return INTERN::FUNC_TP_ORANGE;
         else
-            return DEFS::FUNC_TP_BLUE;
+            return INTERN::FUNC_TP_BLUE;
     }
 
-    template <DEFS::portal_type PORTAL>
+    template <INTERN::portal_type PORTAL>
     inline bool PortalIsPrimary()
     {
-        return usrParams.first_tp_from_blue == (PORTAL == DEFS::FUNC_TP_BLUE);
+        return usrParams.first_tp_from_blue == (PORTAL == INTERN::FUNC_TP_BLUE);
     }
 
-    template <DEFS::portal_type PORTAL>
+    template <INTERN::portal_type PORTAL>
     inline const Portal& GetPortal()
     {
-        return PORTAL == DEFS::FUNC_TP_BLUE ? usrParams.pp->blue : usrParams.pp->orange;
+        return PORTAL == INTERN::FUNC_TP_BLUE ? usrParams.pp->blue : usrParams.pp->orange;
     }
 
     void CallQueued()
@@ -136,13 +138,13 @@ struct GenerateTeleportChainImpl {
             int val = st.tp_queue.front();
             st.tp_queue.pop_front();
             switch (val) {
-                case DEFS::FUNC_RECHECK_COLLISION:
+                case INTERN::FUNC_RECHECK_COLLISION:
                     break;
-                case DEFS::FUNC_TP_BLUE:
-                    TeleportEntity<DEFS::FUNC_TP_BLUE>();
+                case INTERN::FUNC_TP_BLUE:
+                    TeleportEntity<INTERN::FUNC_TP_BLUE>();
                     break;
-                case DEFS::FUNC_TP_ORANGE:
-                    TeleportEntity<DEFS::FUNC_TP_ORANGE>();
+                case INTERN::FUNC_TP_ORANGE:
+                    TeleportEntity<INTERN::FUNC_TP_ORANGE>();
                     break;
                 default:
                     MON_ASSERT(val < 0);
@@ -154,28 +156,28 @@ struct GenerateTeleportChainImpl {
             result.graphviz->PopNode();
     }
 
-    template <DEFS::portal_type PORTAL>
+    template <INTERN::portal_type PORTAL>
     void ReleaseOwnershipOfEntity(bool moving_to_linked)
     {
         if (PORTAL != st.owning_portal)
             return;
-        st.owning_portal = DEFS::PORTAL_NONE;
+        st.owning_portal = INTERN::PORTAL_NONE;
         if (st.touch_scope_depth > 0)
             for (int i = 0; i < result.ent.n_children + !moving_to_linked; i++)
-                st.tp_queue.push_back(DEFS::FUNC_RECHECK_COLLISION);
+                st.tp_queue.push_back(INTERN::FUNC_RECHECK_COLLISION);
     }
 
-    template <DEFS::portal_type PORTAL>
+    template <INTERN::portal_type PORTAL>
     bool SharedEnvironmentCheck()
     {
-        if (st.owning_portal == DEFS::PORTAL_NONE || st.owning_portal == PORTAL)
+        if (st.owning_portal == INTERN::PORTAL_NONE || st.owning_portal == PORTAL)
             return true;
         Vector ent_center = result.ent.GetCenter();
         return ent_center.DistToSqr(GetPortal<PORTAL>().pos) <
                ent_center.DistToSqr(GetPortal<OppositePortalType<PORTAL>()>().pos);
     }
 
-    template <DEFS::portal_type PORTAL>
+    template <INTERN::portal_type PORTAL>
     void PortalTouchEntity()
     {
         if (result.max_tps_exceeded)
@@ -187,7 +189,7 @@ struct GenerateTeleportChainImpl {
                     GetPortal<PORTAL>().plane.n.Dot(result.ent.GetCenter()) > GetPortal<PORTAL>().plane.d;
                 bool player_stuck = result.ent.is_player ? !usrParams.map_origin_inbounds : false;
                 if (ent_in_front || player_stuck) {
-                    if (st.owning_portal != PORTAL && st.owning_portal != DEFS::PORTAL_NONE)
+                    if (st.owning_portal != PORTAL && st.owning_portal != INTERN::PORTAL_NONE)
                         ReleaseOwnershipOfEntity<OppositePortalType<PORTAL>()>(false);
                     st.owning_portal = PORTAL;
                 }
@@ -205,7 +207,7 @@ struct GenerateTeleportChainImpl {
             CallQueued();
     }
 
-    template <DEFS::portal_type PORTAL>
+    template <INTERN::portal_type PORTAL>
     void TeleportEntity()
     {
         if (st.touch_scope_depth > 0) {
@@ -218,14 +220,14 @@ struct GenerateTeleportChainImpl {
         if (result.total_n_teleports >= usrParams.n_max_teleports) {
             result.max_tps_exceeded = true;
             if (result.graphviz)
-                result.graphviz->PushExceededTpNode(PORTAL == DEFS::FUNC_TP_BLUE);
+                result.graphviz->PushExceededTpNode(PORTAL == INTERN::FUNC_TP_BLUE);
             return;
         }
 
         ++result.total_n_teleports;
 
         result.cum_teleports += PortalIsPrimary<PORTAL>() ? 1 : -1;
-        result.ent = usrParams.pp->Teleport(result.ent, PORTAL == DEFS::FUNC_TP_BLUE);
+        result.ent = usrParams.pp->Teleport(result.ent, PORTAL == INTERN::FUNC_TP_BLUE);
         if (usrParams.record_flags & TCRF_RECORD_ENTITY)
             result.ents.push_back(result.ent);
         if (usrParams.record_flags & TCRF_RECORD_TP_DIRS)
@@ -247,7 +249,7 @@ struct GenerateTeleportChainImpl {
         }
 
         if (result.graphviz)
-            result.graphviz->PushTeleportNode(PORTAL == DEFS::FUNC_TP_BLUE, result.cum_teleports, dgPlaneSide);
+            result.graphviz->PushTeleportNode(PORTAL == INTERN::FUNC_TP_BLUE, result.cum_teleports, dgPlaneSide);
 
         ReleaseOwnershipOfEntity<PORTAL>(true);
         st.owning_portal = OppositePortalType<PORTAL>();
@@ -348,3 +350,5 @@ std::string TeleportChainResult::CreateDebugString(const TeleportChainParams& pa
 
     return out;
 }
+
+} // namespace mon

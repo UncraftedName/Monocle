@@ -3,19 +3,21 @@
 #include <cmath>
 
 extern "C" {
-void __cdecl AngleMatrix(const QAngle* angles, matrix3x4_t* matrix);
-void __cdecl AngleVectors(const QAngle* angles, Vector* f, Vector* r, Vector* u);
-void __cdecl MatrixInverseTR(const VMatrix* src, VMatrix* dst);
-void __cdecl Vector3DMultiply(const VMatrix* src1, const Vector* src2, Vector* dst);
-void __cdecl VMatrix__MatrixMul(const VMatrix* lhs, const VMatrix* rhs, VMatrix* out);
-Vector* __cdecl VMatrix__operatorVec(const VMatrix* lhs, Vector* out, const Vector* vVec);
-void __cdecl Portal_CalcPlane(const Vector* portal_pos, const Vector* portal_f, VPlane* out_plane);
-bool __cdecl Portal_EntBehindPlane(const VPlane* portal_plane, const Vector* ent_center);
+void __cdecl MonAsmAngleMatrix(const mon::QAngle* angles, mon::matrix3x4_t* matrix);
+void __cdecl MonAsmAngleVectors(const mon::QAngle* angles, mon::Vector* f, mon::Vector* r, mon::Vector* u);
+void __cdecl MonAsmMatrixInverseTR(const mon::VMatrix* src, mon::VMatrix* dst);
+void __cdecl MonAsmVector3DMultiply(const mon::VMatrix* src1, const mon::Vector* src2, mon::Vector* dst);
+void __cdecl MonAsmVMatrix__MatrixMul(const mon::VMatrix* lhs, const mon::VMatrix* rhs, mon::VMatrix* out);
+mon::Vector* __cdecl MonAsmVMatrix__operatorVec(const mon::VMatrix* lhs, mon::Vector* out, const mon::Vector* vVec);
+void __cdecl MonAsmPortal_CalcPlane(const mon::Vector* portal_pos, const mon::Vector* portal_f, mon::VPlane* out_plane);
+bool __cdecl MonAsmPortal_EntBehindPlane(const mon::VPlane* portal_plane, const mon::Vector* ent_center);
 }
+
+namespace mon {
 
 static void AngleMatrix(const QAngle* angles, const Vector* position, matrix3x4_t* matrix)
 {
-    AngleMatrix(angles, matrix);
+    MonAsmAngleMatrix(angles, matrix);
     (*matrix)[0][3] = position->x;
     (*matrix)[1][3] = position->y;
     (*matrix)[2][3] = position->z;
@@ -33,7 +35,7 @@ static void MatrixSetIdentity(VMatrix& dst)
 
 Portal::Portal(const Vector& v, const QAngle& q) : pos{v}, ang{q}
 {
-    AngleVectors(&ang, &f, &r, &u);
+    MonAsmAngleVectors(&ang, &f, &r, &u);
     plane = VPlane{f, (float)f.Dot(pos)};
     AngleMatrix(&ang, &pos, &mat);
 
@@ -104,17 +106,17 @@ void PortalPair::RecalcTpMatrices(PlacementOrder order_)
 
             // CProp_Portal_Shared::UpdatePortalTransformationMatrix
             VMatrix matPortal1ToWorldInv, matPortal2ToWorld, matRotation;
-            MatrixInverseTR(reinterpret_cast<const VMatrix*>(&p1_mat), &matPortal1ToWorldInv);
+            MonAsmMatrixInverseTR(reinterpret_cast<const VMatrix*>(&p1_mat), &matPortal1ToWorldInv);
             MatrixSetIdentity(matRotation);
             matRotation[0][0] = -1.0f;
             matRotation[1][1] = -1.0f;
             memcpy(&matPortal2ToWorld, &p2_mat, sizeof matrix3x4_t);
             matPortal2ToWorld[3][0] = matPortal2ToWorld[3][1] = matPortal2ToWorld[3][2] = 0.0f;
             matPortal2ToWorld[3][3] = 1.0f;
-            VMatrix__MatrixMul(&matPortal2ToWorld, &matRotation, &p2_to_p1);
-            VMatrix__MatrixMul(&p2_to_p1, &matPortal1ToWorldInv, &p1_to_p2);
+            MonAsmVMatrix__MatrixMul(&matPortal2ToWorld, &matRotation, &p2_to_p1);
+            MonAsmVMatrix__MatrixMul(&p2_to_p1, &matPortal1ToWorldInv, &p1_to_p2);
             // the bit right after in CProp_Portal::UpdatePortalTeleportMatrix
-            MatrixInverseTR(&p1_to_p2, &p2_to_p1);
+            MonAsmMatrixInverseTR(&p1_to_p2, &p2_to_p1);
             break;
         }
         case PlacementOrder::_ULM: {
@@ -127,12 +129,12 @@ void PortalPair::RecalcTpMatrices(PlacementOrder order_)
                 auto& p_to_other = i ? b_to_o : o_to_b;
 
                 VMatrix matLocalToWorldInv, matRotation, tmp;
-                MatrixInverseTR(&p_to_world, &matLocalToWorldInv);
+                MonAsmMatrixInverseTR(&p_to_world, &matLocalToWorldInv);
                 MatrixSetIdentity(matRotation);
                 matRotation[0][0] = -1.0f;
                 matRotation[1][1] = -1.0f;
-                VMatrix__MatrixMul(&other_to_world, &matRotation, &tmp);
-                VMatrix__MatrixMul(&tmp, &matLocalToWorldInv, &p_to_other);
+                MonAsmVMatrix__MatrixMul(&other_to_world, &matRotation, &tmp);
+                MonAsmVMatrix__MatrixMul(&tmp, &matLocalToWorldInv, &p_to_other);
             }
             break;
         }
@@ -164,7 +166,7 @@ Entity PortalPair::Teleport(const Entity& ent, bool tp_from_blue) const
     }
 
     Vector newCenter;
-    VMatrix__operatorVec(tp_from_blue ? &b_to_o : &o_to_b, &newCenter, &oldCenter);
+    MonAsmVMatrix__operatorVec(tp_from_blue ? &b_to_o : &o_to_b, &newCenter, &oldCenter);
     if (ent.is_player)
         return Entity::CreatePlayerFromOrigin(newCenter + (oldPlayerOrigin - oldCenter), playerCrouched);
     return Entity::CreateBall(newCenter, ent.ball.radius);
@@ -173,7 +175,7 @@ Entity PortalPair::Teleport(const Entity& ent, bool tp_from_blue) const
 Vector PortalPair::Teleport(const Vector& pt, bool tp_from_blue) const
 {
     Vector v;
-    VMatrix__operatorVec(tp_from_blue ? &b_to_o : &o_to_b, &v, &pt);
+    MonAsmVMatrix__operatorVec(tp_from_blue ? &b_to_o : &o_to_b, &v, &pt);
     return v;
 }
 
@@ -298,3 +300,5 @@ bool Entity::operator==(const Entity& other) const
                 ? (std::tie(player.crouched, player.origin) == std::tie(other.player.crouched, other.player.origin))
                 : (std::tie(ball.center, ball.radius) == std::tie(other.ball.center, other.ball.radius)));
 }
+
+} // namespace mon

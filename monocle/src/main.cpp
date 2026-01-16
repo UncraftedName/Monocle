@@ -32,18 +32,18 @@ static std::array<const char*, PYT_COUNT> PITCH_YAW_STRS{
     "any",
 };
 
-static Vector RandomPos(small_prng& rng, size_t oct_bits, size_t dist_scale)
+static mon::Vector RandomPos(small_prng& rng, size_t oct_bits, size_t dist_scale)
 {
     float a = 1 << dist_scale;
     float b = 1 << (dist_scale + 1);
-    return Vector{
+    return {
         rng.next_float(a, b) * (oct_bits & 1 ? 1.f : -1.f),
         rng.next_float(a, b) * (oct_bits & 2 ? 1.f : -1.f),
         rng.next_float(a, b) * (oct_bits & 4 ? 1.f : -1.f),
     };
 }
 
-static QAngle RandomAng(small_prng& rng, PITCH_YAW_TYPE type, bool has_roll)
+static mon::QAngle RandomAng(small_prng& rng, PITCH_YAW_TYPE type, bool has_roll)
 {
     float p, y;
     switch (type) {
@@ -76,7 +76,7 @@ static QAngle RandomAng(small_prng& rng, PITCH_YAW_TYPE type, bool has_roll)
             p = y = 0.f;
             MON_ASSERT(0);
     }
-    return QAngle(p, y, has_roll ? rng.next_float(-180.f, 180.f) : 0.f);
+    return {p, y, has_roll ? rng.next_float(-180.f, 180.f) : 0.f};
 }
 
 static void GenerateResultsDistributionsToFile()
@@ -89,8 +89,8 @@ static void GenerateResultsDistributionsToFile()
     };
 
     small_prng rng{};
-    TeleportChainParams params;
-    TeleportChainResult result;
+    mon::TeleportChainParams params;
+    mon::TeleportChainResult result;
     const int n_runs_per_combination = 10000;
 
     std::ofstream of{"results.txt"};
@@ -103,7 +103,7 @@ static void GenerateResultsDistributionsToFile()
     std::array<int, PYT_COUNT> py_types;
     std::array roll_opts{false, true};
     // not per-portal
-    std::array<int, (int)PlacementOrder::COUNT> mat_opts;
+    std::array<int, (int)mon::PlacementOrder::COUNT> mat_opts;
 
     std::iota(py_types.begin(), py_types.end(), 0);
     std::iota(mat_opts.begin(), mat_opts.end(), 0);
@@ -122,23 +122,23 @@ static void GenerateResultsDistributionsToFile()
         int results[RESULT_COUNT]{};
 
         for (int i = 0; i < n_runs_per_combination; i++) {
-            PortalPair pp{
+            mon::PortalPair pp{
                 RandomPos(rng, rng.next_int(0, 8), std::get<0>(blue_opts)),
                 RandomAng(rng, (PITCH_YAW_TYPE)std::get<1>(blue_opts), std::get<2>(blue_opts)),
                 RandomPos(rng, rng.next_int(0, 8), std::get<0>(orange_opts)),
                 RandomAng(rng, (PITCH_YAW_TYPE)std::get<1>(orange_opts), std::get<2>(orange_opts)),
-                (PlacementOrder)std::get<0>(misc_opts),
+                (mon::PlacementOrder)std::get<0>(misc_opts),
             };
-            Vector ent_pos = pp.blue.pos +
-                             pp.blue.r * rng.next_float(-PORTAL_HALF_WIDTH * .5f, PORTAL_HALF_WIDTH * .5f) +
-                             pp.blue.u * rng.next_float(-PORTAL_HALF_HEIGHT * .5f, PORTAL_HALF_HEIGHT * .5f);
+            mon::Vector ent_pos = pp.blue.pos +
+                                  pp.blue.r * rng.next_float(-PORTAL_HALF_WIDTH * .5f, PORTAL_HALF_WIDTH * .5f) +
+                                  pp.blue.u * rng.next_float(-PORTAL_HALF_HEIGHT * .5f, PORTAL_HALF_HEIGHT * .5f);
 
             params.pp = &pp;
-            params.ent = Entity::CreatePlayerFromCenter(ent_pos, true);
+            params.ent = mon::Entity::CreatePlayerFromCenter(ent_pos, true);
             params.map_origin_inbounds = false;
             params.first_tp_from_blue = true;
             params.n_max_teleports = 3;
-            params.record_flags = TCRF_NONE;
+            params.record_flags = mon::TCRF_NONE;
 
             GenerateTeleportChain(params, result);
 
@@ -159,7 +159,7 @@ static void GenerateResultsDistributionsToFile()
             of << prefix << "pitch_yaw_type\": \"" << PITCH_YAW_STRS[std::get<1>(opts)] << "\",\n";
             of << prefix << "has_roll\": " << (std::get<2>(opts) ? "true" : "false") << ",\n";
         }
-        of << "\t\t\"matrix\": \"" << PlacementOrderStrs[(int)std::get<0>(misc_opts)] << "\"";
+        of << "\t\t\"matrix\": \"" << mon::PlacementOrderStrs[(int)std::get<0>(misc_opts)] << "\"";
         of << "\n\t},\n\t\"results\": [";
         for (int i = 0; i < RESULT_COUNT; i++)
             of << ((double)results[i] / n_runs_per_combination) << (i == RESULT_COUNT - 1 ? "]\n}" : ", ");
@@ -170,7 +170,7 @@ static void GenerateResultsDistributionsToFile()
     of << "\n]\n}\n";
 }
 
-static void CreateOverlayPortalImage(const PortalPair& pair,
+static void CreateOverlayPortalImage(const mon::PortalPair& pair,
                                      const char* file_name,
                                      size_t y_res,
                                      bool from_blue,
@@ -178,7 +178,7 @@ static void CreateOverlayPortalImage(const PortalPair& pair,
 {
     TIME_FUNC();
 
-    const Portal& p = from_blue ? pair.blue : pair.orange;
+    const mon::Portal& p = from_blue ? pair.blue : pair.orange;
     size_t x_res = (size_t)((double)y_res * PORTAL_HALF_WIDTH / PORTAL_HALF_HEIGHT);
     struct pixel {
         uint8_t b, g, r, a;
@@ -191,25 +191,25 @@ static void CreateOverlayPortalImage(const PortalPair& pair,
         float oy = PORTAL_HALF_HEIGHT * (-1 + 1.f / y_res);
         float ty = (float)y / (y_res - 1);
         float my = oy * (1 - 2 * ty);
-        Vector u_off = p.u * my;
+        mon::Vector u_off = p.u * my;
 
         pool.push([x_res, u_off, y, from_blue, &p, &pair, &pixels, rand_nudge](int) -> void {
             small_prng rng{y};
-            TeleportChainParams params;
-            TeleportChainResult result;
+            mon::TeleportChainParams params;
+            mon::TeleportChainResult result;
             for (size_t x = 0; x < x_res; x++) {
                 float rx = rand_nudge ? rng.next_float(-.1f, .1f) : 0.f;
                 float ox = PORTAL_HALF_WIDTH * (-1 + 1.f / x_res);
                 float tx = ((float)x + rx) / (x_res - 1);
                 float mx = ox * (1 - 2 * tx);
 
-                Vector r_off = p.r * mx;
+                mon::Vector r_off = p.r * mx;
                 params.pp = &pair;
-                params.ent = Entity::CreatePlayerFromCenter(p.pos + r_off + u_off, true);
+                params.ent = mon::Entity::CreatePlayerFromCenter(p.pos + r_off + u_off, true);
                 params.map_origin_inbounds = false;
                 params.n_max_teleports = 10;
                 params.first_tp_from_blue = from_blue;
-                params.record_flags = TCRF_NONE;
+                params.record_flags = mon::TCRF_NONE;
 
                 GenerateTeleportChain(params, result);
 
@@ -240,8 +240,8 @@ static void FindVagIn04()
     TIME_FUNC();
 
     small_prng rng{0};
-    TeleportChainParams params;
-    TeleportChainResult result;
+    mon::TeleportChainParams params;
+    mon::TeleportChainResult result;
 
     float xmin = -75.70868f;
     float xmax = 145.85846f;
@@ -250,22 +250,22 @@ static void FindVagIn04()
     float yaw_min = -6;
     float yaw_max = 28;
 
-    Vector target_mins{-30.f, 706.f, 566.5f};
-    Vector target_maxs{223.f, 958.f, 700.f};
+    mon::Vector target_mins{-30.f, 706.f, 566.5f};
+    mon::Vector target_maxs{223.f, 958.f, 700.f};
 
     for (int i = 0; i < 100000; i++) {
-        PortalPair pp{
+        mon::PortalPair pp{
             {rng.next_float(xmin, xmax), rng.next_float(ymin, ymax), 255.96877},
             {90, rng.next_float(yaw_min, yaw_max), 0},
             {-448, 0.03125, 54.9502},
             {0, 90, 0},
-            PlacementOrder::BLUE_WAS_CLOSED_ORANGE_OPENED,
+            mon::PlacementOrder::BLUE_WAS_CLOSED_ORANGE_OPENED,
         };
         float r = rng.next_float(-PORTAL_HALF_WIDTH * 0.5f, PORTAL_HALF_WIDTH * 0.5f);
         float u = rng.next_float(-PORTAL_HALF_HEIGHT * 0.5f, PORTAL_HALF_HEIGHT * 0.5f);
 
         params.pp = &pp;
-        params.ent = Entity::CreatePlayerFromCenter(pp.blue.pos + pp.blue.r * r + pp.blue.u * u, true);
+        params.ent = mon::Entity::CreatePlayerFromCenter(pp.blue.pos + pp.blue.r * r + pp.blue.u * u, true);
         params.map_origin_inbounds = true;
         params.first_tp_from_blue = true;
         params.n_max_teleports = 3;
@@ -276,7 +276,7 @@ static void FindVagIn04()
             continue;
         if (result.cum_teleports != -1)
             continue;
-        Vector t = result.ent.GetCenter();
+        mon::Vector t = result.ent.GetCenter();
         if (t.x < target_mins.x || t.y < target_mins.y || t.z < target_mins.z)
             continue;
         if (t.x > target_maxs.x || t.y > target_maxs.y || t.z > target_maxs.z)
@@ -292,26 +292,26 @@ static void FindVagIn04()
 
 static void FindVag18StartCeilCubeRoom()
 {
-    SearchSpace ss{
+    mon::SearchSpace ss{
         .blue_search{
             .lock_opts{1023.96875f, 1023.9687f, 1023.9686f},
-            .type = SPT_WALL_ZN,
-            .pos_spaces{AABB{{605, -230, 1075}, {-90, -20, 930}}},
+            .type = mon::SPT_WALL_ZN,
+            .pos_spaces{mon::AABB{{605, -230, 1075}, {-90, -20, 930}}},
         },
         .orange_search{
             .lock_opts{2559.9688f},
-            .type = SPT_WALL_XN,
+            .type = mon::SPT_WALL_XN,
             .pos_spaces{
-                AABB{{2556, 284, 1278}, {2532, 611, 586}},
-                AABB{{2532, 611, 586}, {2624, 1522, 761}},
-                AABB{{2624, 1522, 761}, {2568, 1182, 1268}},
+                mon::AABB{{2556, 284, 1278}, {2532, 611, 586}},
+                mon::AABB{{2532, 611, 586}, {2624, 1522, 761}},
+                mon::AABB{{2624, 1522, 761}, {2568, 1182, 1268}},
             },
         },
-        .target_space{AABB{{-1022, 620, 3310}, {-1395, 877, 3540}}},
-        .entry_pos_search = SEPF_ANY,
+        .target_space = mon::AABB{{-1022, 620, 3310}, {-1395, 877, 3540}},
+        .entry_pos_search = mon::SEPF_ANY,
         .valid_placement_orders{
-            PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
-            PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION,
+            mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+            mon::PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION,
         },
         .tp_from_blue = true,
         .tp_player = true,
@@ -330,23 +330,23 @@ static void FindVag18StartCeilCubeRoom()
 static void FindComplexChain()
 {
     small_prng rng{0};
-    AABB pos_space{Vector{30, 30, 750}, Vector{400, 400, 1000}};
-    TeleportChainParams params;
-    TeleportChainResult result;
+    mon::AABB pos_space{{30, 30, 750}, {400, 400, 1000}};
+    mon::TeleportChainParams params;
+    mon::TeleportChainResult result;
 
     for (int i = 0; i < 1000000; i++) {
-        PortalPair pp{
+        mon::PortalPair pp{
             pos_space.RandomPtInBox(rng),
-            QAngle{0, rng.next_int(-2, 2) * 90.f, 0},
+            {0, rng.next_int(-2, 2) * 90.f, 0},
             pos_space.RandomPtInBox(rng),
-            QAngle{0, rng.next_int(-2, 2) * 90.f, 0},
-            PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+            {0, rng.next_int(-2, 2) * 90.f, 0},
+            mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
         };
         if (pp.blue.pos.DistToSqr(pp.orange.pos) < 200 * 200)
             continue;
 
         params.pp = &pp;
-        params.ent = Entity::CreatePlayerFromCenter(pp.blue.pos, true);
+        params.ent = mon::Entity::CreatePlayerFromCenter(pp.blue.pos, true);
         params.map_origin_inbounds = true;
         params.n_max_teleports = 10;
         params.first_tp_from_blue = true;
@@ -370,44 +370,44 @@ static void DebugInfinite09Chain()
 {
     (void)freopen("vs_2022_infinite.txt", "w", stdout);
 
-    PortalPair pp{
-        Vector{255.96875f, -161.01295f, 201.96875f},
-        QAngle{-0.f, 180.f, 0.f},
-        Vector{-127.96875f, -191.24300f, 182.03125f},
-        QAngle{0.f, 0.f, 0.f},
-        PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED,
+    mon::PortalPair pp{
+        {255.96875f, -161.01295f, 201.96875f},
+        {-0.f, 180.f, 0.f},
+        {-127.96875f, -191.24300f, 182.03125f},
+        {0.f, 0.f, 0.f},
+        mon::PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED,
     };
 
-    TeleportChainParams params{
+    mon::TeleportChainParams params{
         &pp,
-        Entity::CreatePlayerFromCenter(Vector{-127.96876f, -191.24300f, 182.03125f}, true),
+        mon::Entity::CreatePlayerFromCenter({-127.96876f, -191.24300f, 182.03125f}, true),
     };
     params.n_max_teleports = 5000;
-    TeleportChainResult result;
+    mon::TeleportChainResult result;
 
-    GenerateTeleportChain(params, result);
+    mon::GenerateTeleportChain(params, result);
 }
 
 static void CreateSpinAnimation()
 {
     small_prng rng{20};
-    AABB pos_space{Vector{30, 30, 750}, Vector{400, 400, 1000}};
-    TeleportChainParams params;
-    TeleportChainResult result;
+    mon::AABB pos_space{{30, 30, 750}, {400, 400, 1000}};
+    mon::TeleportChainParams params;
+    mon::TeleportChainResult result;
 
     for (int i = 0; i < 100000; i++) {
-        PortalPair pp{
+        mon::PortalPair pp{
             pos_space.RandomPtInBox(rng),
-            QAngle{rng.next_float(-180.f, 180.f), -180.f, 0},
+            {rng.next_float(-180.f, 180.f), -180.f, 0},
             pos_space.RandomPtInBox(rng),
-            QAngle{rng.next_float(-180.f, 180.f), rng.next_float(-180.f, 180.f), 0},
-            PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+            {rng.next_float(-180.f, 180.f), rng.next_float(-180.f, 180.f), 0},
+            mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
         };
         if (pp.blue.pos.DistToSqr(pp.orange.pos) < 100 * 100)
             continue;
 
         params.pp = &pp;
-        params.ent = Entity::CreatePlayerFromCenter(pp.blue.pos + pp.blue.r, true);
+        params.ent = mon::Entity::CreatePlayerFromCenter(pp.blue.pos + pp.blue.r, true);
         params.n_max_teleports = 10;
         params.first_tp_from_blue = true;
 
@@ -415,13 +415,13 @@ static void CreateSpinAnimation()
 
         if (result.max_tps_exceeded || result.cum_teleports != 1)
             continue;
-        params.ent = Entity::CreatePlayerFromCenter(pp.blue.pos - pp.blue.r, true);
+        params.ent = mon::Entity::CreatePlayerFromCenter(pp.blue.pos - pp.blue.r, true);
         GenerateTeleportChain(params, result);
 
         if (result.max_tps_exceeded || result.cum_teleports != -1)
             continue;
         for (int i = -180; i < 180; i++) {
-            PortalPair pp2{pp.blue.pos, {pp.blue.ang.x, (float)i, 0}, pp.orange.pos, pp.orange.ang, pp.order};
+            mon::PortalPair pp2{pp.blue.pos, {pp.blue.ang.x, (float)i, 0}, pp.orange.pos, pp.orange.ang, pp.order};
             char name[32];
             sprintf(name, "spin_anim/ang_%03d.tga", (360 + (i % 360)) % 360);
             CreateOverlayPortalImage(pp2, name, 350, true);
@@ -433,27 +433,27 @@ static void CreateSpinAnimation()
 static void FindInfiniteChain()
 {
     small_prng rng{0};
-    AABB pos_space{Vector{30, 30, 750}, Vector{400, 400, 1000}};
-    TeleportChainParams params;
-    TeleportChainResult result;
+    mon::AABB pos_space{{30, 30, 750}, {400, 400, 1000}};
+    mon::TeleportChainParams params;
+    mon::TeleportChainResult result;
 
     for (int i = 0; i < 100000; i++) {
-        PortalPair pp{
+        mon::PortalPair pp{
             pos_space.RandomPtInBox(rng),
-            QAngle{0, rng.next_int(-2, 2) * 90.f, 0},
+            {0, rng.next_int(-2, 2) * 90.f, 0},
             pos_space.RandomPtInBox(rng),
-            QAngle{0, rng.next_int(-2, 2) * 90.f, 0},
-            PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+            {0, rng.next_int(-2, 2) * 90.f, 0},
+            mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
         };
         if (pp.blue.pos.DistToSqr(pp.orange.pos) < 100 * 100)
             continue;
 
         params.pp = &pp;
-        params.ent = Entity::CreatePlayerFromCenter(pp.blue.pos, true);
+        params.ent = mon::Entity::CreatePlayerFromCenter(pp.blue.pos, true);
         params.n_max_teleports = 400000;
         params.first_tp_from_blue = true;
 
-        GenerateTeleportChain(params, result);
+        mon::GenerateTeleportChain(params, result);
 
         if (!result.max_tps_exceeded)
             continue;
@@ -466,23 +466,23 @@ static void FindInfiniteChain()
 static void FindFiniteChainThatGivesNFE()
 {
     small_prng rng{0};
-    AABB pos_space{Vector{30, 30, 750}, Vector{400, 400, 1000}};
-    TeleportChainParams params;
-    TeleportChainResult result;
+    mon::AABB pos_space{{30, 30, 750}, {400, 400, 1000}};
+    mon::TeleportChainParams params;
+    mon::TeleportChainResult result;
 
     for (int i = 0; i < 1000000; i++) {
-        PortalPair pp{
+        mon::PortalPair pp{
             pos_space.RandomPtInBox(rng),
-            QAngle{0, rng.next_int(-2, 2) * 90.f, 0},
+            {0, rng.next_int(-2, 2) * 90.f, 0},
             pos_space.RandomPtInBox(rng),
-            QAngle{0, rng.next_int(-2, 2) * 90.f, 0},
-            PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+            {0, rng.next_int(-2, 2) * 90.f, 0},
+            mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
         };
         if (pp.blue.pos.DistToSqr(pp.orange.pos) < 100 * 100)
             continue;
 
         params.pp = &pp;
-        params.ent = Entity::CreatePlayerFromCenter(pp.blue.pos, true);
+        params.ent = mon::Entity::CreatePlayerFromCenter(pp.blue.pos, true);
         params.n_max_teleports = 34;
         params.map_origin_inbounds = false;
         params.first_tp_from_blue = true;
@@ -498,14 +498,14 @@ static void FindFiniteChainThatGivesNFE()
             continue;
         printf("found chain of length %u on iteration %d\n", result.tp_dirs.size(), i);
         printf("%s\n", pp.NewLocationCmd().c_str());
-        printf("%s\n", Entity::CreatePlayerFromCenter(result.ents[0].GetCenter(), true).SetPosCmd().c_str());
+        printf("%s\n", mon::Entity::CreatePlayerFromCenter(result.ents[0].GetCenter(), true).SetPosCmd().c_str());
         break;
     }
 }
 
 static void FindVagIn09EleTop()
 {
-    SearchSpace ss{
+    mon::SearchSpace ss{
         .blue_search{
             .lock_opts{
                 0.0312423706f,
@@ -518,19 +518,19 @@ static void FindVagIn09EleTop()
                 0.0312505625f,
                 0.0312515162f,
             },
-            .type = SPT_WALL_ZP,
-            .pos_spaces = {AABB{Vector{101, 771, 0}, Vector{-198, 880, 12}}},
+            .type = mon::SPT_WALL_ZP,
+            .pos_spaces = {mon::AABB{{101, 771, 0}, {-198, 880, 12}}},
         },
         .orange_search{
             .locked = true,
             .locked_pos{-127.96875f, -191.242996f, 182.03125f},
             .locked_ang{0, 0, 0},
         },
-        .target_space{Vector{-259, 752, 568}, Vector{391, 946, 740}},
-        .entry_pos_search = SEPF_LOWER,
+        .target_space = mon::AABB{{-259, 752, 568}, {391, 946, 740}},
+        .entry_pos_search = mon::SEPF_LOWER,
         .valid_placement_orders{
-            PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
-            PlacementOrder::AFTER_LOAD,
+            mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+            mon::PlacementOrder::AFTER_LOAD,
         },
         .tp_from_blue = false,
         .tp_player = true,
@@ -543,7 +543,7 @@ static void FindVagIn09EleTop()
 
 static void FindVagIn09EleBottom()
 {
-    SearchSpace ss{
+    mon::SearchSpace ss{
         .blue_search{
             .lock_opts{
                 0.0312423706f,
@@ -556,19 +556,19 @@ static void FindVagIn09EleBottom()
                 0.0312505625f,
                 0.0312515162f,
             },
-            .type = SPT_WALL_ZP,
-            .pos_spaces = {AABB{Vector{843, -170, -5}, Vector{743, -1, 25}}},
+            .type = mon::SPT_WALL_ZP,
+            .pos_spaces = {mon::AABB{{843, -170, -5}, {743, -1, 25}}},
         },
         .orange_search{
             .locked = true,
             .locked_pos{-127.96875f, -191.242996f, 182.03125f},
             .locked_ang{0, 0, 0},
         },
-        .target_space{Vector{-267, 962, -11}, Vector{-360, 720, 190}},
-        .entry_pos_search = SEPF_LOWER,
+        .target_space = mon::AABB{{-267, 962, -11}, {-360, 720, 190}},
+        .entry_pos_search = mon::SEPF_LOWER,
         .valid_placement_orders{
-            PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
-            PlacementOrder::AFTER_LOAD,
+            mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+            mon::PlacementOrder::AFTER_LOAD,
         },
         .tp_from_blue = false,
         .tp_player = true,
@@ -581,23 +581,23 @@ static void FindVagIn09EleBottom()
 
 static void FindVagIn11()
 {
-    SearchSpace ss{
+    mon::SearchSpace ss{
         .blue_search{
             .lock_opts{128.03125f},
-            .type = SPT_WALL_ZP,
-            .pos_spaces = {AABB{Vector{-860, 280, 175}, Vector{-551, -43, 127}}},
+            .type = mon::SPT_WALL_ZP,
+            .pos_spaces = {mon::AABB{{-860, 280, 175}, {-551, -43, 127}}},
         },
         .orange_search{
             .lock_opts{-1183.96875f},
-            .type = SPT_WALL_YP,
-            .pos_spaces = {AABB{Vector{-80, -1167, 285}, Vector{-536, -1193, 373}}},
+            .type = mon::SPT_WALL_YP,
+            .pos_spaces = {mon::AABB{{-80, -1167, 285}, {-536, -1193, 373}}},
         },
-        .target_space{Vector{-600, -1260, 1647}, Vector{-369, -1413, 1762}},
-        .entry_pos_search = SEPF_LOWER,
+        .target_space = mon::AABB{{-600, -1260, 1647}, {-369, -1413, 1762}},
+        .entry_pos_search = mon::SEPF_LOWER,
         .valid_placement_orders{
-            PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
-            PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION,
-            PlacementOrder::AFTER_LOAD,
+            mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+            mon::PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION,
+            mon::PlacementOrder::AFTER_LOAD,
         },
         .tp_from_blue = false,
         .tp_player = true,
@@ -610,26 +610,26 @@ static void FindVagIn11()
 
 static void FindKnownVagIn11()
 {
-    SearchSpace ss{
+    mon::SearchSpace ss{
         .blue_search{
             .lock_opts{383.96875f},
-            .type = SPT_WALL_ZN,
-            .pos_spaces = {AABB{Vector{-860, 280, 450}, Vector{-551, -43, 380}}},
+            .type = mon::SPT_WALL_ZN,
+            .pos_spaces = {mon::AABB{{-860, 280, 450}, {-551, -43, 380}}},
         },
         .orange_search{
             .lock_opts{
                 -64.03125f,
                 -64.0312653f,
             },
-            .type = SPT_WALL_XN,
-            .pos_spaces = {AABB{Vector{-80, -816, 284}, Vector{-40, -1154, 509}}},
+            .type = mon::SPT_WALL_XN,
+            .pos_spaces = {mon::AABB{{-80, -816, 284}, {-40, -1154, 509}}},
         },
-        .target_space{Vector{-106, -1427, 1597}, Vector{-273, -1282, 1729}},
-        .entry_pos_search = SEPF_LOWER,
+        .target_space = mon::AABB{{-106, -1427, 1597}, {-273, -1282, 1729}},
+        .entry_pos_search = mon::SEPF_LOWER,
         .valid_placement_orders{
-            PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
-            PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION,
-            PlacementOrder::AFTER_LOAD,
+            mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+            mon::PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION,
+            mon::PlacementOrder::AFTER_LOAD,
         },
         .tp_from_blue = false,
         .tp_player = true,
@@ -642,7 +642,7 @@ static void FindKnownVagIn11()
 
 int main()
 {
-    SyncFloatingPointControlWord();
+    mon::SyncFloatingPointControlWord();
 
     FindKnownVagIn11();
 }

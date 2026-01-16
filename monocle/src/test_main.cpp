@@ -21,7 +21,7 @@
 
 int main(int argc, char* argv[])
 {
-    SyncFloatingPointControlWord();
+    mon::SyncFloatingPointControlWord();
     Catch::Session session;
     session.libIdentify();
     session.configData().rngSeed = CATCH_SEED;
@@ -41,12 +41,12 @@ int main(int argc, char* argv[])
     int _test_it = GENERATE(range(0, n)); \
     INFO("test iteration " << _test_it)
 
-static Portal RandomPortal(small_prng& rng)
+static mon::Portal RandomPortal(small_prng& rng)
 {
     constexpr float p_min = -3000.f, p_max = 3000.f, a_min = -180.f, a_max = 180.f;
-    return Portal{
-        Vector{rng.next_float(p_min, p_max), rng.next_float(p_min, p_max), rng.next_float(p_min, p_max)},
-        QAngle{rng.next_float(a_min, a_max), rng.next_float(a_min, a_max), rng.next_float(a_min, a_max)},
+    return mon::Portal{
+        mon::Vector{rng.next_float(p_min, p_max), rng.next_float(p_min, p_max), rng.next_float(p_min, p_max)},
+        mon::QAngle{rng.next_float(a_min, a_max), rng.next_float(a_min, a_max), rng.next_float(a_min, a_max)},
     };
 }
 
@@ -54,19 +54,19 @@ TEST_CASE("ShouldTeleport (no portal hole check)")
 {
     REPEAT_TEST(1000);
     static small_prng rng;
-    Portal p = RandomPortal(rng);
+    mon::Portal p = RandomPortal(rng);
     bool is_player = rng.next_bool();
     INFO("entity is " << (is_player ? "player" : "non-player"));
 
     if (is_player) {
-        Entity ent1 = Entity::CreatePlayerFromCenter(p.pos - p.f, true);
+        mon::Entity ent1 = mon::Entity::CreatePlayerFromCenter(p.pos - p.f, true);
         REQUIRE(p.ShouldTeleport(ent1, false));
-        Entity ent2 = Entity::CreatePlayerFromCenter(p.pos + p.f, true);
+        mon::Entity ent2 = mon::Entity::CreatePlayerFromCenter(p.pos + p.f, true);
         REQUIRE_FALSE(p.ShouldTeleport(ent2, false));
     } else {
-        Entity ent1 = Entity::CreateBall(p.pos - p.f, 0.f);
+        mon::Entity ent1 = mon::Entity::CreateBall(p.pos - p.f, 0.f);
         REQUIRE(p.ShouldTeleport(ent1, false));
-        Entity ent2 = Entity::CreateBall(p.pos + p.f, 0.f);
+        mon::Entity ent2 = mon::Entity::CreateBall(p.pos + p.f, 0.f);
         REQUIRE_FALSE(p.ShouldTeleport(ent2, false));
     }
 }
@@ -111,45 +111,45 @@ TEST_CASE("ShouldTeleport (with portal hole check")
     int grid_bits = rng.next_int(0, 0b111111);
     bool axial = rng.next_bool();
 
-    Vector pos{rng.next_float(-3000.f, 3000.f), rng.next_float(-3000.f, 3000.f), rng.next_float(-3000.f, 3000.f)};
-    QAngle ang;
+    mon::Vector pos{rng.next_float(-3000.f, 3000.f), rng.next_float(-3000.f, 3000.f), rng.next_float(-3000.f, 3000.f)};
+    mon::QAngle ang;
     if (axial) {
         // BoxOnPlaneSide has special axial cases, test those too
         float roll = rng.next_bool() ? rng.next_float(-180.f, 180.f) : 0.f;
         switch (rng.next_int(0, 6)) {
             case 0:
-                ang = QAngle{0, 0, roll};
+                ang = {0, 0, roll};
                 break;
             case 1:
-                ang = QAngle{0, 90, roll};
+                ang = {0, 90, roll};
                 break;
             case 2:
-                ang = QAngle{0, 180, roll};
+                ang = {0, 180, roll};
                 break;
             case 3:
-                ang = QAngle{0, -90, roll};
+                ang = {0, -90, roll};
                 break;
             case 4:
-                ang = QAngle{90, 0, roll};
+                ang = {90, 0, roll};
                 break;
             case 5:
-                ang = QAngle{-90, 0, roll};
+                ang = {-90, 0, roll};
                 break;
             default:
                 FAIL();
         }
     } else {
-        ang = QAngle{rng.next_float(-180.f, 180.f), rng.next_float(-180.f, 180.f), rng.next_float(-180.f, 180.f)};
+        ang = mon::QAngle{rng.next_float(-180.f, 180.f), rng.next_float(-180.f, 180.f), rng.next_float(-180.f, 180.f)};
     }
 
-    Portal p{pos, ang};
+    mon::Portal p{pos, ang};
 
     INFO("corner: " << ((corner_bits & 1) ? "-f " : "+f ") << ((corner_bits & 2) ? "-r " : "+r ")
                     << ((corner_bits & 4) ? "-u" : "+u"));
 
-    Vector corner_off = p.f * ((corner_bits & 1) ? -PORTAL_HOLE_DEPTH : 0.f) +
-                        p.r * ((corner_bits & 2) ? -PORTAL_HALF_WIDTH : PORTAL_HALF_WIDTH) +
-                        p.u * ((corner_bits & 4) ? -PORTAL_HALF_HEIGHT : PORTAL_HALF_HEIGHT);
+    mon::Vector corner_off = p.f * ((corner_bits & 1) ? -PORTAL_HOLE_DEPTH : 0.f) +
+                             p.r * ((corner_bits & 2) ? -PORTAL_HALF_WIDTH : PORTAL_HALF_WIDTH) +
+                             p.u * ((corner_bits & 4) ? -PORTAL_HALF_HEIGHT : PORTAL_HALF_HEIGHT);
 
     constexpr float SPACING = 20.f;
 
@@ -159,26 +159,26 @@ TEST_CASE("ShouldTeleport (with portal hole check")
                             << SPACING);
 
     // the grid offset is set so that bigger grid bits point are further away from the portal center, this makes the should_teleport condition simplier
-    Vector grid_off = p.f * (-1.5f + ((grid_bits >> 0) & 0b11)) * ((corner_bits & 1) ? -1.f : 1.f) +
-                      p.r * (-1.5f + ((grid_bits >> 2) & 0b11)) * ((corner_bits & 2) ? -1.f : 1.f) +
-                      p.u * (-1.5f + ((grid_bits >> 4) & 0b11)) * ((corner_bits & 4) ? -1.f : 1.f);
+    mon::Vector grid_off = p.f * (-1.5f + ((grid_bits >> 0) & 0b11)) * ((corner_bits & 1) ? -1.f : 1.f) +
+                           p.r * (-1.5f + ((grid_bits >> 2) & 0b11)) * ((corner_bits & 2) ? -1.f : 1.f) +
+                           p.u * (-1.5f + ((grid_bits >> 4) & 0b11)) * ((corner_bits & 4) ? -1.f : 1.f);
 
-    Vector ent_pos = p.pos + corner_off + grid_off * SPACING;
-    Entity ent;
+    mon::Vector ent_pos = p.pos + corner_off + grid_off * SPACING;
+    mon::Entity ent;
     switch (ent_type) {
         case 0: {
             UNSCOPED_INFO("entity is small ball");
-            ent = Entity::CreateBall(ent_pos, 1.f);
+            ent = mon::Entity::CreateBall(ent_pos, 1.f);
             break;
         }
         case 1: {
             UNSCOPED_INFO("entity is ball w/ radius " << SPACING);
-            ent = Entity::CreateBall(ent_pos, SPACING);
+            ent = mon::Entity::CreateBall(ent_pos, SPACING);
             break;
         }
         case 2: {
             UNSCOPED_INFO("entity is crouched player");
-            ent = Entity::CreatePlayerFromCenter(ent_pos, true);
+            ent = mon::Entity::CreatePlayerFromCenter(ent_pos, true);
             break;
         }
         default:
@@ -206,17 +206,17 @@ TEST_CASE("Teleport")
 {
     REPEAT_TEST(10000);
     static small_prng rng;
-    Portal p1 = RandomPortal(rng);
-    Portal p2 = RandomPortal(rng);
+    mon::Portal p1 = RandomPortal(rng);
+    mon::Portal p2 = RandomPortal(rng);
     int translate_mask = rng.next_int(0, 16);
-    int order = rng.next_int(0, (int)PlacementOrder::COUNT);
+    int order = rng.next_int(0, (int)mon::PlacementOrder::COUNT);
     bool p1_teleporting = rng.next_bool();
     bool is_player = rng.next_bool();
     INFO("entity is " << (is_player ? "player" : "non-player"));
 
-    PortalPair pp{p1, p2, (PlacementOrder)order};
+    mon::PortalPair pp{p1, p2, (mon::PlacementOrder)order};
 
-    Vector off1{0.f, 0.f, 0.f}, off2{0.f, 0.f, 0.f};
+    mon::Vector off1{0.f, 0.f, 0.f}, off2{0.f, 0.f, 0.f};
     if (translate_mask & 1) {
         off1 += p1.f;
         off2 -= p2.f;
@@ -230,11 +230,12 @@ TEST_CASE("Teleport")
         off2 += p2.u;
     }
     bool sign = translate_mask & 8;
-    Vector pt1 = p1.pos + (sign ? off1 : -off1);
-    Vector pt2 = p2.pos + (sign ? off2 : -off2);
+    mon::Vector pt1 = p1.pos + (sign ? off1 : -off1);
+    mon::Vector pt2 = p2.pos + (sign ? off2 : -off2);
 
-    Vector center = p1_teleporting ? pt1 : pt2;
-    Entity ent = is_player ? Entity::CreatePlayerFromCenter(center, true) : Entity::CreateBall(center, 0.f);
+    mon::Vector center = p1_teleporting ? pt1 : pt2;
+    mon::Entity ent =
+        is_player ? mon::Entity::CreatePlayerFromCenter(center, true) : mon::Entity::CreateBall(center, 0.f);
     ent = pp.Teleport(ent, p1_teleporting);
     REQUIRE_THAT(ent.GetCenter().DistToSqr(p1_teleporting ? pt2 : pt1), Catch::Matchers::WithinAbs(0.0, 0.01));
 }
@@ -243,7 +244,7 @@ TEST_CASE("Nudging point towards portal plane (close)")
 {
     REPEAT_TEST(10000);
     static small_prng rng;
-    Portal p = RandomPortal(rng);
+    mon::Portal p = RandomPortal(rng);
     for (int i = 0; i < 3; i++)
         if (fabsf(p.pos[i]) < 0.5f)
             return;
@@ -251,23 +252,23 @@ TEST_CASE("Nudging point towards portal plane (close)")
     bool is_player = rng.next_bool();
     INFO("entity is " << (is_player ? "player" : "non-player"));
 
-    Vector off{0.f, 0.f, 0.f};
+    mon::Vector off{0.f, 0.f, 0.f};
     if (translate_mask & 1)
         off += p.r;
     if (translate_mask & 2)
         off += p.u;
-    Vector pt = p.pos + ((translate_mask & 4) ? off : -off);
+    mon::Vector pt = p.pos + ((translate_mask & 4) ? off : -off);
     // add a little "random" nudge
     pt[0] += pt[0] / 100000.f;
 
-    Entity ent = is_player ? Entity::CreatePlayerFromCenter(pt, true) : Entity::CreateBall(pt, 0.f);
+    mon::Entity ent = is_player ? mon::Entity::CreatePlayerFromCenter(pt, true) : mon::Entity::CreateBall(pt, 0.f);
     auto [nudged_ent, plane_dist] = ProjectEntityToPortalPlane(ent, p);
     REQUIRE(!!plane_dist.is_valid);
     REQUIRE(p.ShouldTeleport(ent, false) == !!plane_dist.pt_was_behind_portal);
     // nudged entity is guaranteed to be behind the portal
     REQUIRE(p.ShouldTeleport(nudged_ent, false));
     // nudge the entity across the portal boundary
-    Vector& ent_pos = nudged_ent.GetPosRef();
+    mon::Vector& ent_pos = nudged_ent.GetPosRef();
     float target = ent_pos[plane_dist.ax] + p.plane.n[plane_dist.ax];
     ent_pos[plane_dist.ax] = std::nextafterf(ent_pos[plane_dist.ax], target);
     REQUIRE_FALSE(p.ShouldTeleport(nudged_ent, false));
@@ -277,15 +278,15 @@ TEST_CASE("Nudging point towards portal plane (close)")
 TEST_CASE("Nudging point towards portal plane (far)")
 {
     static small_prng rng;
-    Portal p = RandomPortal(rng);
-    Entity ent = Entity::CreatePlayerFromCenter(p.pos + p.r * 2.5f - p.u * 1.5f + p.f * 12345.f, false);
-    auto [nudged_ent, plane_dist] = ProjectEntityToPortalPlane(ent, p);
+    mon::Portal p = RandomPortal(rng);
+    mon::Entity ent = mon::Entity::CreatePlayerFromCenter(p.pos + p.r * 2.5f - p.u * 1.5f + p.f * 12345.f, false);
+    auto [nudged_ent, plane_dist] = mon::ProjectEntityToPortalPlane(ent, p);
     REQUIRE(!!plane_dist.is_valid);
     REQUIRE_FALSE(p.ShouldTeleport(ent, false));
     // nudged entity is guaranteed to be behind the portal
     REQUIRE(p.ShouldTeleport(nudged_ent, false));
     // nudge the entity across the portal boundary
-    Vector& ent_pos = nudged_ent.GetPosRef();
+    mon::Vector& ent_pos = nudged_ent.GetPosRef();
     float target = ent_pos[plane_dist.ax] + p.plane.n[plane_dist.ax];
     ent_pos[plane_dist.ax] = std::nextafterf(ent_pos[plane_dist.ax], target);
     REQUIRE_FALSE(p.ShouldTeleport(nudged_ent, false));
@@ -298,22 +299,22 @@ TEST_CASE("Teleport chain results in VAG")
     * setpos -127.96875385 -191.24299622 164.03125
     * teleports by: orange, blue, blue
     */
-    PortalPair pp{
-        Vector{255.96875f, -161.01294f, 54.031242f},
-        QAngle{-0.f, 180.f, 0.f},
-        Vector{-127.96875f, -191.24300f, 182.03125f},
-        QAngle{0.f, 0.f, 0.f},
-        PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED,
+    mon::PortalPair pp{
+        {255.96875f, -161.01294f, 54.031242f},
+        {-0.f, 180.f, 0.f},
+        {-127.96875f, -191.24300f, 182.03125f},
+        {0.f, 0.f, 0.f},
+        mon::PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED,
     };
 
-    TeleportChainParams params{
+    mon::TeleportChainParams params{
         &pp,
-        Entity::CreatePlayerFromCenter(Vector{-127.96876f, -191.24300f, 182.03125f}, true),
+        mon::Entity::CreatePlayerFromCenter({-127.96876f, -191.24300f, 182.03125f}, true),
     };
-    params.record_flags = TCRF_RECORD_ALL;
-    TeleportChainResult result;
+    params.record_flags = mon::TCRF_RECORD_ALL;
+    mon::TeleportChainResult result;
 
-    Vector target_vag_pos = pp.Teleport(params.ent.GetCenter(), true);
+    mon::Vector target_vag_pos = pp.Teleport(params.ent.GetCenter(), true);
 
     const int n_teleports_success = 3;
 
@@ -321,7 +322,7 @@ TEST_CASE("Teleport chain results in VAG")
         DYNAMIC_SECTION("teleport limit is " << n_max_teleports)
         {
             params.n_max_teleports = n_max_teleports;
-            GenerateTeleportChain(params, result);
+            mon::GenerateTeleportChain(params, result);
 
             int n_expected_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
 
@@ -377,22 +378,22 @@ TEST_CASE("Teleport chain results in 5 teleports (cum=1)")
     * setpos -127.96875385 -191.24299622 164.03125
     * teleports by: orange, blue, blue, orange, orange
     */
-    PortalPair pp{
-        Vector{255.96875f, -223.96875f, 54.031242f},
-        QAngle{-0.f, 180.f, 0.f},
-        Vector{-127.96875f, -191.24300f, 182.03125f},
-        QAngle{0.f, 0.f, 0.f},
-        PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED,
+    mon::PortalPair pp{
+        {255.96875f, -223.96875f, 54.031242f},
+        {-0.f, 180.f, 0.f},
+        {-127.96875f, -191.24300f, 182.03125f},
+        {0.f, 0.f, 0.f},
+        mon::PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED,
     };
 
-    TeleportChainParams params{
+    mon::TeleportChainParams params{
         &pp,
-        Entity::CreatePlayerFromCenter(Vector{-127.96876f, -191.24300f, 182.03125f}, true),
+        mon::Entity::CreatePlayerFromCenter({-127.96876f, -191.24300f, 182.03125f}, true),
     };
-    params.record_flags = TCRF_RECORD_ALL;
-    TeleportChainResult result;
+    params.record_flags = mon::TCRF_RECORD_ALL;
+    mon::TeleportChainResult result;
 
-    Vector target_vag_pos = pp.Teleport(params.ent.GetCenter(), true);
+    mon::Vector target_vag_pos = pp.Teleport(params.ent.GetCenter(), true);
 
     const int n_teleports_success = 5;
 
@@ -400,7 +401,7 @@ TEST_CASE("Teleport chain results in 5 teleports (cum=1)")
         DYNAMIC_SECTION("teleport limit is " << n_max_teleports)
         {
             params.n_max_teleports = n_max_teleports;
-            GenerateTeleportChain(params, result);
+            mon::GenerateTeleportChain(params, result);
             int n_expected_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
 
             REQUIRE(result.total_n_teleports == n_expected_teleports);
@@ -466,28 +467,28 @@ TEST_CASE("Teleport chain results in 5 teleports (cum=1)")
 // an actual "double VAG" found by xeonic
 TEST_CASE("Teleport chain results in 6 teleports (cum=-2)")
 {
-    PortalPair pp{
-        Vector{1001.2641f, 40.5883064f, 64.03125f},
-        QAngle{-90.f, -92.752083f, 0.f},
-        Vector{511.96875f, 25.968760f, 54.031242f},
-        QAngle{-0.f, 180.f, 0.f},
-        PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+    mon::PortalPair pp{
+        {1001.2641f, 40.5883064f, 64.03125f},
+        {-90.f, -92.752083f, 0.f},
+        {511.96875f, 25.968760f, 54.031242f},
+        {-0.f, 180.f, 0.f},
+        mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
     };
 
-    TeleportChainParams params{
+    mon::TeleportChainParams params{
         &pp,
-        Entity::CreatePlayerFromOrigin(Vector{1000.405640f, 51.970764f, 46.03125f}, true),
+        mon::Entity::CreatePlayerFromOrigin({1000.405640f, 51.970764f, 46.03125f}, true),
     };
     params.project_to_first_portal_plane = false;
-    params.record_flags = TCRF_RECORD_ALL;
-    TeleportChainResult result;
+    params.record_flags = mon::TCRF_RECORD_ALL;
+    mon::TeleportChainResult result;
 
     /*
     * This is the position on the tick after the teleport according to the trace. It's a few units
     * off and I'm not really sure why. Gravity and floor portal exit velocity don't seem to account
     * for the full difference.
     */
-    Entity target_ent = Entity::CreatePlayerFromOrigin(Vector{1050.953125f, 539.331055f, 563.865845f}, true);
+    mon::Entity target_ent = mon::Entity::CreatePlayerFromOrigin({1050.953125f, 539.331055f, 563.865845f}, true);
 
     const int n_teleports_success = 6;
 
@@ -495,7 +496,7 @@ TEST_CASE("Teleport chain results in 6 teleports (cum=-2)")
         DYNAMIC_SECTION("teleport limit is " << n_max_teleports)
         {
             params.n_max_teleports = n_max_teleports;
-            GenerateTeleportChain(params, result);
+            mon::GenerateTeleportChain(params, result);
             int n_expected_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
 
             REQUIRE(result.total_n_teleports == n_expected_teleports);
@@ -564,23 +565,23 @@ TEST_CASE("Finite teleport chain results in free edicts")
     * chamber 09 - blue portal on opposite wall of orange, top left corner
     * setpos -127.96875385 -191.24299622 164.03125
     */
-    PortalPair pp{
-        Vector{255.96875f, -161.01295f, 201.96877f},
-        QAngle{-0.f, 180.f, 0.f},
-        Vector{-127.96875f, -191.24300f, 182.03125f},
-        QAngle{0.f, 0.f, 0.f},
-        PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED,
+    mon::PortalPair pp{
+        {255.96875f, -161.01295f, 201.96877f},
+        {-0.f, 180.f, 0.f},
+        {-127.96875f, -191.24300f, 182.03125f},
+        {0.f, 0.f, 0.f},
+        mon::PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED,
     };
 
-    TeleportChainParams params{
+    mon::TeleportChainParams params{
         &pp,
-        Entity::CreatePlayerFromCenter(Vector{-127.96876f, -191.24300f, 182.03125f}, true),
+        mon::Entity::CreatePlayerFromCenter({-127.96876f, -191.24300f, 182.03125f}, true),
     };
     params.n_max_teleports = 200;
-    params.record_flags = TCRF_RECORD_ALL;
-    TeleportChainResult result;
+    params.record_flags = mon::TCRF_RECORD_ALL;
+    mon::TeleportChainResult result;
 
-    GenerateTeleportChain(params, result);
+    mon::GenerateTeleportChain(params, result);
 
     REQUIRE(result.total_n_teleports == 82);
     REQUIRE(result.cum_teleports == 0);
@@ -592,24 +593,24 @@ TEST_CASE("Finite teleport chain results in free edicts")
 
 TEST_CASE("19 Lochness")
 {
-    PortalPair pp{
-        Vector{-416.247498f, 735.368835f, 255.96875f},
-        QAngle{90.f, -90.2385559f, 0.f},
-        Vector{-394.776428f, -56.0312462f, 38.8377686f},
-        QAngle{-44.9994202f, 180.f, 0.f},
-        PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+    mon::PortalPair pp{
+        {-416.247498f, 735.368835f, 255.96875f},
+        {90.f, -90.2385559f, 0.f},
+        {-394.776428f, -56.0312462f, 38.8377686f},
+        {-44.9994202f, 180.f, 0.f},
+        mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
     };
 
-    TeleportChainParams params{
+    mon::TeleportChainParams params{
         &pp,
-        Entity::CreatePlayerFromOrigin(Vector{-416.247498f, 735.368835f, 219.97f}, false),
+        mon::Entity::CreatePlayerFromOrigin({-416.247498f, 735.368835f, 219.97f}, false),
     };
     params.project_to_first_portal_plane = false;
 
-    TeleportChainResult result;
-    GenerateTeleportChain(params, result);
+    mon::TeleportChainResult result;
+    mon::GenerateTeleportChain(params, result);
 
-    Entity roughExpectedEnt = Entity::CreatePlayerFromOrigin(Vector{398.634583f, 599.235168f, 400.928467f}, true);
+    mon::Entity roughExpectedEnt = mon::Entity::CreatePlayerFromOrigin({398.634583f, 599.235168f, 400.928467f}, true);
 
     REQUIRE(result.total_n_teleports == 3);
     REQUIRE(result.cum_teleports == -1);
@@ -622,24 +623,24 @@ TEST_CASE("19 Lochness")
 
 TEST_CASE("E01 AAG")
 {
-    PortalPair pp{
-        Vector{-141.904663f, 730.353394f, -191.417892f},
-        QAngle{15.9453955f, 180.f, 0.f},
-        Vector{-233.054321f, 652.257446f, -255.96875f},
-        QAngle{-90.f, 155.909348f, 0.f},
-        PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+    mon::PortalPair pp{
+        {-141.904663f, 730.353394f, -191.417892f},
+        {15.9453955f, 180.f, 0.f},
+        {-233.054321f, 652.257446f, -255.96875f},
+        {-90.f, 155.909348f, 0.f},
+        mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
     };
 
-    TeleportChainParams params{
+    mon::TeleportChainParams params{
         &pp,
-        Entity::CreatePlayerFromOrigin(Vector{-136.239883, 726.482483, -240.416977}, false),
+        mon::Entity::CreatePlayerFromOrigin({-136.239883, 726.482483, -240.416977}, false),
     };
     params.project_to_first_portal_plane = false;
 
-    TeleportChainResult result;
-    GenerateTeleportChain(params, result);
+    mon::TeleportChainResult result;
+    mon::GenerateTeleportChain(params, result);
 
-    Entity roughExpectedEnt = Entity::CreatePlayerFromOrigin(Vector{-93.691399f, 636.419739f, -166.272324f}, true);
+    mon::Entity roughExpectedEnt = mon::Entity::CreatePlayerFromOrigin({-93.691399f, 636.419739f, -166.272324f}, true);
 
     REQUIRE(result.total_n_teleports == 3);
     REQUIRE(result.cum_teleports == -1);
@@ -658,24 +659,25 @@ TEST_CASE("00 AAG")
     * can abuse a lot of AAGs in random places - for some reason static prop normals are often
     * messed up in the same way.
     */
-    PortalPair pp{
-        Vector{-474.710541f, -1082.65906f, 182.03125f},
-        QAngle{0.00538991531f, 135.f, 0.f},
-        Vector{-735.139282f, -923.540344f, 128.03125f},
-        QAngle{-90.f, 55.0390396f, 0.f},
-        PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+    mon::PortalPair pp{
+        {-474.710541f, -1082.65906f, 182.03125f},
+        {0.00538991531f, 135.f, 0.f},
+        {-735.139282f, -923.540344f, 128.03125f},
+        {-90.f, 55.0390396f, 0.f},
+        mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
     };
 
-    TeleportChainParams params{
+    mon::TeleportChainParams params{
         &pp,
-        Entity::CreatePlayerFromOrigin(Vector{-473.604370f, -1082.235498f, 128.031250f}, false),
+        mon::Entity::CreatePlayerFromOrigin({-473.604370f, -1082.235498f, 128.031250f}, false),
     };
     params.project_to_first_portal_plane = false;
 
-    TeleportChainResult result;
-    GenerateTeleportChain(params, result);
+    mon::TeleportChainResult result;
+    mon::GenerateTeleportChain(params, result);
 
-    Entity roughExpectedEnt = Entity::CreatePlayerFromOrigin(Vector{-629.746887f, -1311.233398f, 138.827957f}, true);
+    mon::Entity roughExpectedEnt =
+        mon::Entity::CreatePlayerFromOrigin({-629.746887f, -1311.233398f, 138.827957f}, true);
 
     REQUIRE(result.total_n_teleports == 3);
     REQUIRE(result.cum_teleports == -1);
@@ -798,13 +800,13 @@ TEST_CASE("SPT with IPC")
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
 
     small_prng rng;
-    TeleportChainParams params;
-    TeleportChainResult result;
+    mon::TeleportChainParams params;
+    mon::TeleportChainResult result;
 
     int iteration = 0;
     while (iteration < 1000) {
-        Portal blue = RandomPortal(rng);
-        Portal orange = RandomPortal(rng);
+        mon::Portal blue = RandomPortal(rng);
+        mon::Portal orange = RandomPortal(rng);
         /*
         * Don't use portals that are too close to each other - this can cause false positives with
         * the distance threshold to the teleport destination.
@@ -812,10 +814,10 @@ TEST_CASE("SPT with IPC")
         if (blue.pos.DistToSqr(orange.pos) < 500 * 500)
             continue;
 
-        PortalPair pp{blue, orange, PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION};
+        mon::PortalPair pp{blue, orange, mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION};
 
         params.pp = &pp;
-        params.ent = Entity::CreatePlayerFromCenter(blue.pos, player_crouched);
+        params.ent = mon::Entity::CreatePlayerFromCenter(blue.pos, player_crouched);
         params.n_max_teleports = 3;
 
         GenerateTeleportChain(params, result);
@@ -839,7 +841,7 @@ TEST_CASE("SPT with IPC")
         * origin of the map being inbounds in some cases.
         */
 
-        Entity tmp_player = Entity::CreatePlayerFromCenter(blue.pos + blue.f, player_crouched);
+        mon::Entity tmp_player = mon::Entity::CreatePlayerFromCenter(blue.pos + blue.f, player_crouched);
         conn.SendCmd(std::format("{}; {}", pp.NewLocationCmd("; ", true), tmp_player.SetPosCmd()));
         conn.RecvAck();
         conn.SendCmd(result.ents[0].SetPosCmd());
@@ -851,7 +853,7 @@ TEST_CASE("SPT with IPC")
         conn.SendCmd("spt_ipc_properties 1 m_vecOrigin");
         conn.RecvAck();
         conn.NextRecvMsg();
-        Vector actual_player_pos{};
+        mon::Vector actual_player_pos{};
         n_args = _snscanf_s(conn.BufPtr(),
                             conn.BufLen(),
                             "{\"entity\":{"
@@ -868,7 +870,7 @@ TEST_CASE("SPT with IPC")
             REQUIRE(actual_player_pos.DistToSqr(result.ent.player.origin) < 100 * 100);
         } else {
             // the AG force crouched the player and the above estimate may be off
-            Entity better_ent_estimate = Entity::CreatePlayerFromCenter(result.ent.GetCenter(), false);
+            mon::Entity better_ent_estimate = mon::Entity::CreatePlayerFromCenter(result.ent.GetCenter(), false);
             REQUIRE(actual_player_pos.DistToSqr(better_ent_estimate.player.origin) < 100 * 100);
         }
         printf("iteration %d: %s", iteration, result.cum_teleports == -1 ? "VAG\n" : "Normal teleport\n");

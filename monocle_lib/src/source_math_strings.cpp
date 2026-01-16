@@ -3,6 +3,8 @@
 #include <format>
 #include <vector>
 
+namespace mon {
+
 std::string Portal::NewLocationCmd(std::string_view portal_name, bool escape_quotes) const
 {
     std::string_view quote_escape = escape_quotes ? "\\" : "";
@@ -132,3 +134,5 @@ std::string VMatrix::DebugToString() const
 {
     return DebugFmtMatrix((float*)m, 4, 4);
 }
+
+} // namespace mon

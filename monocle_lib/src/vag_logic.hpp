@@ -9,7 +9,9 @@
 #include <memory>
 #include <utility>
 
-class GvGen;
+namespace mon {
+
+class GraphvizGen;
 
 /*
 * Represents a "distance in ulps" from a point to a portal plane. Specifically, this the number of
@@ -131,7 +133,7 @@ struct TeleportChainResult {
     */
     std::vector<bool> tp_dirs;
     // an optional pointer (user-supplied), which will record the chain as a graphviz DOT graph
-    GvGen* graphviz = nullptr;
+    GraphvizGen* graphviz = nullptr;
 
     // internal
     TeleportChainInternalState _st;
@@ -156,7 +158,7 @@ void GenerateTeleportChain(const TeleportChainParams& params, TeleportChainResul
 * Generates a GraphViz graph representing a teleport chain. Originally this was done via the
 * Graphviz C API, but that led to DLL linking hell. So instead this just formats the file manually.
 */
-class GvGen {
+class GraphvizGen {
     std::vector<int> node_stack;
     int node_counter;
     int touch_call_index; // which of the 4 touch calls are we in right now?
@@ -206,3 +208,5 @@ private:
     friend void GenerateTeleportChain(const TeleportChainParams& params, TeleportChainResult& result);
     friend struct GenerateTeleportChainImpl;
 };
+
+} // namespace mon
