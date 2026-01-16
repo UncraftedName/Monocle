@@ -70,7 +70,7 @@ struct TeleportChainParams::InternalState {
 TeleportChainParams::TeleportChainParams(const PortalPair* pp, Entity ent)
     : pp(pp),
       ent(ent),
-      first_tp_from_blue(pp ? (pp->blue.plane.DistTo(ent.GetCenter()) < pp->orange.plane.DistTo(ent.GetCenter()))
+      first_tp_from_blue(pp ? (pp->blue.pos.DistToSqr(ent.GetCenter()) < pp->orange.pos.DistToSqr(ent.GetCenter()))
                             : true)
 {}
 
@@ -257,8 +257,8 @@ struct GenerateTeleportChainImpl {
             PointToPortalPlaneUlpDist plane_dist{.is_valid = false};
             if (result.cum_teleports == 0 || result.cum_teleports == 1) {
                 auto& p_plane_diff_from = (result.cum_teleports == 0) == usrParams.first_tp_from_blue
-                                          ? usrParams.pp->blue
-                                          : usrParams.pp->orange;
+                                            ? usrParams.pp->blue
+                                            : usrParams.pp->orange;
                 plane_dist = ProjectEntityToPortalPlane(result.ent, p_plane_diff_from).second;
                 if (plane_dist.is_valid)
                     dgPlaneSide = plane_dist.pt_was_behind_portal ? -1 : 1;
