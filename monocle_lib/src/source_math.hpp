@@ -6,9 +6,6 @@
 #include <array>
 #include <string>
 #include <math.h>
-#include <stdio.h>
-
-#define F_FMT "%.9g"
 
 #define PORTAL_HALF_WIDTH 32.0f
 #define PORTAL_HALF_HEIGHT 54.0f
@@ -29,29 +26,6 @@ inline void SyncFloatingPointControlWord()
 #define DEBUG_NAN_CTORS
 #endif
 
-template <size_t R, size_t C>
-static void PrintMatrix(const float (&arr)[R][C])
-{
-    int fmtLens[R][C]{};
-    int maxLens[C]{};
-    for (int i = 0; i < C; i++) {
-        for (int j = 0; j < R; j++) {
-            fmtLens[j][i] = snprintf(nullptr, 0, F_FMT, arr[j][i]);
-            if (fmtLens[j][i] > maxLens[i])
-                maxLens[i] = fmtLens[j][i];
-        }
-    }
-    for (int j = 0; j < R; j++) {
-        for (int i = 0; i < C; i++) {
-            printf("%*s" F_FMT "%s",
-                   maxLens[i] - fmtLens[j][i],
-                   "",
-                   arr[j][i],
-                   i == C - 1 ? (j == R - 1 ? "" : "\n") : ", ");
-        }
-    }
-}
-
 struct Vector {
     float x, y, z;
 
@@ -62,11 +36,6 @@ struct Vector {
 #endif
     constexpr explicit Vector(float v) : x{v}, y{v}, z{v} {}
     constexpr Vector(float x, float y, float z) : x{x}, y{y}, z{z} {}
-
-    void print() const
-    {
-        printf(F_FMT " " F_FMT " " F_FMT, x, y, z);
-    }
 
     Vector& operator+=(const Vector& v)
     {
@@ -146,6 +115,8 @@ struct Vector {
     {
         return x == o.x && y == o.y && z == o.z;
     }
+
+    std::string ToString(std::string_view delim = ", ") const;
 };
 
 struct QAngle {
@@ -158,9 +129,9 @@ struct QAngle {
 #endif
     constexpr QAngle(float x, float y, float z) : x{x}, y{y}, z{z} {}
 
-    void print() const
+    std::string ToString(std::string_view delim = ", ") const
     {
-        Vector{x, y, z}.print();
+        return ((Vector*)this)->ToString(delim);
     }
 };
 
@@ -179,10 +150,7 @@ struct matrix3x4_t {
         return m_flMatVal[i];
     }
 
-    void print() const
-    {
-        PrintMatrix(m_flMatVal);
-    }
+    std::string DebugToString() const;
 };
 
 struct VMatrix {
@@ -207,10 +175,7 @@ struct VMatrix {
         return m[i];
     }
 
-    void print() const
-    {
-        PrintMatrix(m);
-    }
+    std::string DebugToString() const;
 };
 
 struct VPlane {
@@ -230,12 +195,7 @@ struct VPlane {
         return (float)(n.Dot(v) - d);
     }
 
-    void print() const
-    {
-        printf("n=(");
-        n.print();
-        printf("), d=" F_FMT, d);
-    }
+    std::string ToString() const;
 };
 
 // g_DefaultViewVectors
@@ -298,7 +258,7 @@ public:
         return is_player ? player.origin : ball.center;
     }
 
-    std::string GetSetPosCmd() const;
+    std::string SetPosCmd() const;
 };
 
 struct plane_bits {
@@ -324,25 +284,8 @@ struct Portal {
     // follows the logic in ShouldTeleportTouchingEntity
     bool ShouldTeleport(const Entity& ent, bool check_portal_hole) const;
 
-    std::string CreateNewLocationCmd(std::string_view portal_name, bool escape_quotes = false) const;
-
-    void print() const
-    {
-        printf("pos: ");
-        pos.print();
-        printf(", ang: ");
-        ang.print();
-        printf("\nf: ");
-        f.print();
-        printf("\nr: ");
-        r.print();
-        printf("\nu: ");
-        u.print();
-        printf("\nplane: ");
-        plane.print();
-        printf("\nmat:\n");
-        mat.print();
-    }
+    std::string NewLocationCmd(std::string_view portal_name, bool escape_quotes = false) const;
+    std::string DebugToString(std::string_view portal_name) const;
 };
 
 /*
@@ -467,19 +410,8 @@ struct PortalPair {
     Entity Teleport(const Entity& ent, bool tp_from_blue) const;
     Vector Teleport(const Vector& pt, bool tp_from_blue) const;
 
-    std::string CreateNewLocationCmd(std::string_view delim = "\n", bool escape_quotes = false) const;
-
-    void print() const
-    {
-        printf("blue:\n");
-        blue.print();
-        printf("\nmat to linked:\n");
-        b_to_o.print();
-        printf("\n\n----------------------------------------\n\norange:\n");
-        orange.print();
-        printf("\n\nmat to linked:\n");
-        o_to_b.print();
-    }
+    std::string NewLocationCmd(std::string_view delim = "\n", bool escape_quotes = false) const;
+    std::string DebugToString() const;
 };
 
 enum PlaneSideResult {

@@ -1,9 +1,6 @@
-#include "monocle_config.hpp"
 #include "source_math.hpp"
 
-#include <cstring>
 #include <cmath>
-#include <format>
 
 extern "C" {
 void __cdecl AngleMatrix(const QAngle* angles, matrix3x4_t* matrix);
@@ -92,36 +89,6 @@ bool Portal::ShouldTeleport(const Entity& ent, bool check_portal_hole) const
                 return false;
     }
     return true;
-}
-
-std::string Portal::CreateNewLocationCmd(std::string_view portal_name, bool escape_quotes) const
-{
-    // clang-format off
-    std::string_view quote_escape = escape_quotes ? "\\" : "";
-    return std::format("ent_fire {}\"{}{}\" newlocation {}\""
-                       MON_F_FMT " " MON_F_FMT " " MON_F_FMT " "
-                       MON_F_FMT " " MON_F_FMT " " MON_F_FMT "{}\"",
-                       quote_escape,
-                       portal_name,
-                       quote_escape,
-                       quote_escape,
-                       pos.x, pos.y, pos.z,
-                       ang.x, ang.y, ang.z,
-                       quote_escape);
-    // clang-format on
-}
-
-std::string PortalPair::CreateNewLocationCmd(std::string_view delim, bool escape_quotes) const
-{
-    std::string blue_str = blue.CreateNewLocationCmd("blue", escape_quotes);
-    std::string orange_str = orange.CreateNewLocationCmd("orange", escape_quotes);
-    /*
-    * orange UpdatePortalTeleportMatrix -> orange must be last
-    * blue UpdatePortalTeleportMatrix -> blue must be last
-    * UpdateLinkMatrix -> order agnostic
-    */
-    bool blue_first = order == PlacementOrder::_ORANGE_UPTM;
-    return std::format("{}{}{}", blue_first ? blue_str : orange_str, delim, blue_first ? orange_str : blue_str);
 }
 
 void PortalPair::RecalcTpMatrices(PlacementOrder order_)
@@ -330,10 +297,4 @@ bool Entity::operator==(const Entity& other) const
            (is_player
                 ? (std::tie(player.crouched, player.origin) == std::tie(other.player.crouched, other.player.origin))
                 : (std::tie(ball.center, ball.radius) == std::tie(other.ball.center, other.ball.radius)));
-}
-
-std::string Entity::GetSetPosCmd() const
-{
-    MON_ASSERT(is_player);
-    return std::format("setpos {:.9g} {:.9g} {:.9g}", player.origin.x, player.origin.y, player.origin.z);
 }

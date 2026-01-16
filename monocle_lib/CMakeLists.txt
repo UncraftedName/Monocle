@@ -1,6 +1,7 @@
 set(SRC_FILES
 	src/source_math.asm
 	src/source_math.cpp
+	src/source_math_strings.cpp
 	src/vag_logic.cpp
 	src/gv_gen.cpp
 )

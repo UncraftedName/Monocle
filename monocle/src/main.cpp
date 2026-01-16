@@ -281,8 +281,8 @@ static void FindVagIn04()
             continue;
         if (t.x > target_maxs.x || t.y > target_maxs.y || t.z > target_maxs.z)
             continue;
-        printf("%s\n", pp.CreateNewLocationCmd().c_str());
-        printf("%s\n", result.ent.GetSetPosCmd().c_str());
+        printf("%s\n", pp.NewLocationCmd().c_str());
+        printf("%s\n", result.ent.SetPosCmd().c_str());
         const char* file_name = "04_blue.tga";
         printf("Found portal, generating overlay image\n");
         CreateOverlayPortalImage(pp, file_name, 1000, true);
@@ -358,8 +358,8 @@ static void FindComplexChain()
         if (result.cum_teleports >= -1 && result.cum_teleports <= 1)
             continue;
         printf("iteration %u, %u teleports, %d cum teleports\n", i, result.tp_dirs.size(), result.cum_teleports);
-        printf("%s\n", pp.CreateNewLocationCmd().c_str());
-        printf("%s\n", result.ent.GetSetPosCmd().c_str());
+        printf("%s\n", pp.NewLocationCmd().c_str());
+        printf("%s\n", result.ent.SetPosCmd().c_str());
         printf("generating overlay image...\n");
         CreateOverlayPortalImage(pp, "complex_chain.tga", 1000, true);
         break;
@@ -457,8 +457,8 @@ static void FindInfiniteChain()
 
         if (!result.max_tps_exceeded)
             continue;
-        printf("%s\n", pp.CreateNewLocationCmd().c_str());
-        printf("%s\n", params.ent.GetSetPosCmd().c_str());
+        printf("%s\n", pp.NewLocationCmd().c_str());
+        printf("%s\n", params.ent.SetPosCmd().c_str());
         break;
     }
 }
@@ -497,8 +497,8 @@ static void FindFiniteChainThatGivesNFE()
         if (!plane_dist.pt_was_behind_portal)
             continue;
         printf("found chain of length %u on iteration %d\n", result.tp_dirs.size(), i);
-        printf("%s\n", pp.CreateNewLocationCmd().c_str());
-        printf("%s\n", Entity::CreatePlayerFromCenter(result.ents[0].GetCenter(), true).GetSetPosCmd().c_str());
+        printf("%s\n", pp.NewLocationCmd().c_str());
+        printf("%s\n", Entity::CreatePlayerFromCenter(result.ents[0].GetCenter(), true).SetPosCmd().c_str());
         break;
     }
 }

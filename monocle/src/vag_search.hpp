@@ -112,8 +112,8 @@ struct SearchResult {
         printf("Search found VAG at iteration %u\nPortal placement order: %s\n",
                n_iterations,
                PlacementOrderStrs[(int)pp.order]);
-        printf("%s\n", pp.CreateNewLocationCmd().c_str());
-        printf("%s\n", ent.GetSetPosCmd().c_str());
+        printf("%s\n", pp.NewLocationCmd().c_str());
+        printf("%s\n", ent.SetPosCmd().c_str());
     }
 };
 
@@ -160,8 +160,8 @@ struct SearchSpace {
 
             if (i == 0) {
                 printf("sample portals:\n");
-                printf("%s\n", st.pp.CreateNewLocationCmd().c_str());
-                printf("sample player location:\n%s\n", st.ent.GetSetPosCmd().c_str());
+                printf("%s\n", st.pp.NewLocationCmd().c_str());
+                printf("sample player location:\n%s\n", st.ent.SetPosCmd().c_str());
                 printf("expected result for %s: ", PlacementOrderStrs[(int)st.pp.order]);
                 if (chain_result.max_tps_exceeded)
                     printf("exceeded chain limit\n\n");

@@ -840,9 +840,9 @@ TEST_CASE("SPT with IPC")
         */
 
         Entity tmp_player = Entity::CreatePlayerFromCenter(blue.pos + blue.f, player_crouched);
-        conn.SendCmd(std::format("{}; {}", pp.CreateNewLocationCmd("; ", true), tmp_player.GetSetPosCmd()));
+        conn.SendCmd(std::format("{}; {}", pp.NewLocationCmd("; ", true), tmp_player.SetPosCmd()));
         conn.RecvAck();
-        conn.SendCmd(result.ents[0].GetSetPosCmd());
+        conn.SendCmd(result.ents[0].SetPosCmd());
         conn.RecvAck();
 
         // timescale 1: sleep for 350ms, timescale 20: sleep for 10ms
