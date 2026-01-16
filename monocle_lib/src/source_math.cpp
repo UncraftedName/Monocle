@@ -1,3 +1,4 @@
+#include "monocle_config.hpp"
 #include "source_math.hpp"
 
 #include <cstring>
@@ -93,12 +94,42 @@ bool Portal::ShouldTeleport(const Entity& ent, bool check_portal_hole) const
     return true;
 }
 
-void PortalPair::CalcTpMatrices(PlacementOrder order)
+std::string Portal::CreateNewLocationCmd(std::string_view portal_name, bool escape_quotes) const
 {
-    switch (order) {
+    // clang-format off
+    std::string_view quote_escape = escape_quotes ? "\\" : "";
+    return std::format("ent_fire {}\"{}{}\" newlocation {}\""
+                       MON_F_FMT " " MON_F_FMT " " MON_F_FMT " "
+                       MON_F_FMT " " MON_F_FMT " " MON_F_FMT "{}\"",
+                       quote_escape,
+                       portal_name,
+                       quote_escape,
+                       quote_escape,
+                       pos.x, pos.y, pos.z,
+                       ang.x, ang.y, ang.z,
+                       quote_escape);
+    // clang-format on
+}
+
+std::string PortalPair::CreateNewLocationCmd(std::string_view delim, bool escape_quotes) const
+{
+    std::string blue_str = blue.CreateNewLocationCmd("blue", escape_quotes);
+    std::string orange_str = orange.CreateNewLocationCmd("orange", escape_quotes);
+    /*
+    * orange UpdatePortalTeleportMatrix -> orange must be last
+    * blue UpdatePortalTeleportMatrix -> blue must be last
+    * UpdateLinkMatrix -> order agnostic
+    */
+    bool blue_first = order == PlacementOrder::_ORANGE_UPTM;
+    return std::format("{}{}{}", blue_first ? blue_str : orange_str, delim, blue_first ? orange_str : blue_str);
+}
+
+void PortalPair::RecalcTpMatrices(PlacementOrder order_)
+{
+    switch (order_) {
         case PlacementOrder::_BLUE_UPTM:
         case PlacementOrder::_ORANGE_UPTM: {
-            bool ob = order == PlacementOrder::_BLUE_UPTM;
+            bool ob = order_ == PlacementOrder::_BLUE_UPTM;
             auto& p1_mat = ob ? blue.mat : orange.mat;
             auto& p2_mat = ob ? orange.mat : blue.mat;
             auto& p1_to_p2 = ob ? b_to_o : o_to_b;
@@ -141,13 +172,11 @@ void PortalPair::CalcTpMatrices(PlacementOrder order)
         default:
             assert(0);
     }
+    order = order_;
 }
 
 Entity PortalPair::Teleport(const Entity& ent, bool tp_from_blue) const
 {
-    // you haven't called CalcTpMatrices yet!!!
-    assert(!std::isnan(b_to_o.m[3][3]) && !std::isnan(o_to_b.m[3][3]));
-
     Vector oldCenter = ent.GetCenter();
     const Vector& oldPlayerOrigin = ent.player.origin;
     bool playerCrouched = ent.player.crouched;
@@ -176,8 +205,6 @@ Entity PortalPair::Teleport(const Entity& ent, bool tp_from_blue) const
 
 Vector PortalPair::Teleport(const Vector& pt, bool tp_from_blue) const
 {
-    // you haven't called CalcTpMatrices yet!!!
-    assert(!std::isnan(b_to_o.m[3][3]) && !std::isnan(o_to_b.m[3][3]));
     Vector v;
     VMatrix__operatorVec(tp_from_blue ? &b_to_o : &o_to_b, &v, &pt);
     return v;

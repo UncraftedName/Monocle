@@ -324,6 +324,8 @@ struct Portal {
     // follows the logic in ShouldTeleportTouchingEntity
     bool ShouldTeleport(const Entity& ent, bool check_portal_hole) const;
 
+    std::string CreateNewLocationCmd(std::string_view portal_name, bool escape_quotes = false) const;
+
     void print() const
     {
         printf("pos: ");
@@ -343,6 +345,21 @@ struct Portal {
     }
 };
 
+/*
+* When a portal is placed, it calculates its teleport matrix "from scratch" and sets the other
+* portal's matrix to the inverse. When portals are loaded in via a save, they both calculate their
+* matrix "from scratch". Of course due to floating point shenanigans, these 3 cases *may* change
+* the exact values in the teleport matrices. At the end of the day, those are the only 3 cases:
+* 
+* - blue is last placed portal
+* - orange is last placed portal
+* - portals loaded in from save
+* 
+* The relevant game functions for setting these matrices is ridiculously obtuse - not math-wise,
+* but because the functions are sometimes called multiple times which overwrites the old values.
+* I've written out the rough call stack for a bunch of different scenarios with '***' denoting
+* where the matrices are written for the final time.
+*/
 enum class PlacementOrder {
 
     /*
@@ -426,17 +443,31 @@ static std::array<const char*, (int)PlacementOrder::COUNT> PlacementOrderStrs{
 struct PortalPair {
     Portal blue, orange;
     VMatrix b_to_o, o_to_b;
+    PlacementOrder order;
 
-    PortalPair(const Portal& blue, const Portal& orange) : blue{blue}, orange{orange} {};
-    PortalPair(const Vector& blue_pos, const QAngle& blue_ang, const Vector& orange_pos, const QAngle& orange_ang)
-        : blue{blue_pos, blue_ang}, orange{orange_pos, orange_ang}
-    {}
+    PortalPair(const Portal& blue, const Portal& orange, PlacementOrder order)
+        : blue{blue}, orange{orange}, order{order}
+    {
+        RecalcTpMatrices(order);
+    };
+
+    PortalPair(const Vector& blue_pos,
+               const QAngle& blue_ang,
+               const Vector& orange_pos,
+               const QAngle& orange_ang,
+               PlacementOrder order)
+        : blue{blue_pos, blue_ang}, orange{orange_pos, orange_ang}, order{order}
+    {
+        RecalcTpMatrices(order);
+    }
 
     // sets b_to_o & o_to_b
-    void CalcTpMatrices(PlacementOrder order);
+    void RecalcTpMatrices(PlacementOrder order);
 
     Entity Teleport(const Entity& ent, bool tp_from_blue) const;
     Vector Teleport(const Vector& pt, bool tp_from_blue) const;
+
+    std::string CreateNewLocationCmd(std::string_view delim = "\n", bool escape_quotes = false) const;
 
     void print() const
     {
@@ -448,19 +479,6 @@ struct PortalPair {
         orange.print();
         printf("\n\nmat to linked:\n");
         o_to_b.print();
-    }
-
-    void PrintNewlocationCmd() const
-    {
-        for (int i = 0; i < 2; i++) {
-            auto& p = i ? blue : orange;
-            printf("ent_fire %s newlocation \"", i ? "blue" : "orange");
-            for (int j = 0; j < 2; j++) {
-                const Vector& v = j ? *(Vector*)&p.ang : p.pos;
-                for (int k = 0; k < 3; k++)
-                    printf(F_FMT "%s", v[k], j == 1 && k == 2 ? "\"\n" : " ");
-            }
-        }
     }
 };
 

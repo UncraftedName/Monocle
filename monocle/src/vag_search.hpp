@@ -104,7 +104,6 @@ enum SearchEntryPosFlags {
 
 struct SearchResult {
     int n_iterations;
-    PlacementOrder po;
     Entity ent;
     TeleportChainResult chain_result;
     PortalPair pp;
@@ -113,8 +112,8 @@ struct SearchResult {
     {
         printf("Search found VAG at iteration %u\nPortal placement order: %s\n",
                n_iterations,
-               PlacementOrderStrs[(int)po]);
-        pp.PrintNewlocationCmd();
+               PlacementOrderStrs[(int)pp.order]);
+        printf("%s\n", pp.CreateNewLocationCmd().c_str());
         printf("%s\n", ent.GetSetPosCmd().c_str());
     }
 };
@@ -132,12 +131,17 @@ struct SearchSpace {
 
     std::optional<SearchResult> FindVag(small_prng& rng, int n_iterations)
     {
-        SearchResult st{.pp{{}, {}, {}, {}}};
+        TeleportChainResult chain_result;
+
         for (int i = 0; i < n_iterations; i++) {
-            st.n_iterations = i;
-            st.pp = PortalPair{blue_search.Generate(rng), orange_search.Generate(rng)};
-            st.po = rng.next_elem(valid_placement_orders);
-            st.pp.CalcTpMatrices(st.po);
+            SearchResult st{
+                .n_iterations = i,
+                .pp{
+                    blue_search.Generate(rng),
+                    orange_search.Generate(rng),
+                    rng.next_elem(valid_placement_orders),
+                },
+            };
 
             const Portal& p = tp_from_blue ? st.pp.blue : st.pp.orange;
             assert((entry_pos_search & SEPF_ANY) != 0);
@@ -153,25 +157,27 @@ struct SearchSpace {
             params.first_tp_from_blue = tp_from_blue;
             params.map_origin_inbounds = false;
 
-            GenerateTeleportChain(params, st.chain_result);
+            GenerateTeleportChain(params, chain_result);
 
             if (i == 0) {
                 printf("sample portals:\n");
-                st.pp.PrintNewlocationCmd();
+                printf("%s\n", st.pp.CreateNewLocationCmd().c_str());
                 printf("sample player location:\n%s\n", st.ent.GetSetPosCmd().c_str());
-                printf("expected result for %s: ", PlacementOrderStrs[(int)st.po]);
-                if (st.chain_result.max_tps_exceeded)
+                printf("expected result for %s: ", PlacementOrderStrs[(int)st.pp.order]);
+                if (chain_result.max_tps_exceeded)
                     printf("exceeded chain limit\n\n");
                 else
-                    printf("%d cum teleports\n\n", st.chain_result.cum_teleports);
+                    printf("%d cum teleports\n\n", chain_result.cum_teleports);
             }
 
-            if (st.chain_result.max_tps_exceeded)
+            if (chain_result.max_tps_exceeded)
                 continue;
-            if (st.chain_result.cum_teleports != -1)
+            if (chain_result.cum_teleports != -1)
                 continue;
-            if (!target_space.VectorInBox(st.chain_result.ents.back().GetCenter()))
+            if (!target_space.VectorInBox(chain_result.ents.back().GetCenter()))
                 continue;
+            st.chain_result = std::move(chain_result);
+            st.ent = st.chain_result.ent;
             return st;
         }
         return {};

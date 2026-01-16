@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <chrono>
 #include <thread>
+#include <format>
 
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "Mswsock.lib")
@@ -213,8 +214,7 @@ TEST_CASE("Teleport")
     bool is_player = rng.next_bool();
     INFO("entity is " << (is_player ? "player" : "non-player"));
 
-    PortalPair pp{p1, p2};
-    pp.CalcTpMatrices((PlacementOrder)order);
+    PortalPair pp{p1, p2, (PlacementOrder)order};
 
     Vector off1{0.f, 0.f, 0.f}, off2{0.f, 0.f, 0.f};
     if (translate_mask & 1) {
@@ -303,8 +303,8 @@ TEST_CASE("Teleport chain results in VAG")
         QAngle{-0.f, 180.f, 0.f},
         Vector{-127.96875f, -191.24300f, 182.03125f},
         QAngle{0.f, 0.f, 0.f},
+        PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED,
     };
-    pp.CalcTpMatrices(PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED);
 
     TeleportChainParams params{
         &pp,
@@ -382,8 +382,8 @@ TEST_CASE("Teleport chain results in 5 teleports (cum=1)")
         QAngle{-0.f, 180.f, 0.f},
         Vector{-127.96875f, -191.24300f, 182.03125f},
         QAngle{0.f, 0.f, 0.f},
+        PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED,
     };
-    pp.CalcTpMatrices(PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED);
 
     TeleportChainParams params{
         &pp,
@@ -471,8 +471,8 @@ TEST_CASE("Teleport chain results in 6 teleports (cum=-2)")
         QAngle{-90.f, -92.752083f, 0.f},
         Vector{511.96875f, 25.968760f, 54.031242f},
         QAngle{-0.f, 180.f, 0.f},
+        PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
     };
-    pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
 
     TeleportChainParams params{
         &pp,
@@ -569,8 +569,8 @@ TEST_CASE("Finite teleport chain results in free edicts")
         QAngle{-0.f, 180.f, 0.f},
         Vector{-127.96875f, -191.24300f, 182.03125f},
         QAngle{0.f, 0.f, 0.f},
+        PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED,
     };
-    pp.CalcTpMatrices(PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED);
 
     TeleportChainParams params{
         &pp,
@@ -597,8 +597,8 @@ TEST_CASE("19 Lochness")
         QAngle{90.f, -90.2385559f, 0.f},
         Vector{-394.776428f, -56.0312462f, 38.8377686f},
         QAngle{-44.9994202f, 180.f, 0.f},
+        PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
     };
-    pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
 
     TeleportChainParams params{
         &pp,
@@ -627,8 +627,8 @@ TEST_CASE("E01 AAG")
         QAngle{15.9453955f, 180.f, 0.f},
         Vector{-233.054321f, 652.257446f, -255.96875f},
         QAngle{-90.f, 155.909348f, 0.f},
+        PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
     };
-    pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
 
     TeleportChainParams params{
         &pp,
@@ -663,8 +663,8 @@ TEST_CASE("00 AAG")
         QAngle{0.00538991531f, 135.f, 0.f},
         Vector{-735.139282f, -923.540344f, 128.03125f},
         QAngle{-90.f, 55.0390396f, 0.f},
+        PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
     };
-    pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
 
     TeleportChainParams params{
         &pp,
@@ -714,7 +714,7 @@ TEST_CASE("SPT with IPC")
     struct _TCPConnection {
         SOCKET sock = INVALID_SOCKET;
         bool _cleanup_sock = false;
-        char buf[1024]{}; // send/recv
+        char recv_buf[1024]{};
         int off = 0;
         int recvLen = 0;
 
@@ -736,27 +736,18 @@ TEST_CASE("SPT with IPC")
                 SKIP("Failed to connect to SPT");
         }
 
-        void SendCmd(const char* fmt, ...)
+        void SendCmd(const std::string& s)
         {
             recvLen = -1;
-            va_list va;
-            va_start(va, fmt);
-            char cmdBuf[1024];
-            int len = vsnprintf(cmdBuf, sizeof cmdBuf, fmt, va);
-            if (len < 0 || len >= sizeof cmdBuf)
-                FAIL("cmd format error");
-            len = snprintf(buf, sizeof buf, "{\"type\":\"cmd\",\"cmd\":\"%s\"}", cmdBuf);
-            if (len >= sizeof buf)
-                FAIL("cmd format error");
-            int ret = send(sock, buf, len + 1, 0);
+            std::string send_str = std::format("{{\"type\":\"cmd\",\"cmd\":\"{}\"}}", s);
+            int ret = send(sock, send_str.c_str(), send_str.size() + 1, 0);
             if (ret == SOCKET_ERROR)
                 SKIP("send failed (" << ret << ")");
-            va_end(va);
         }
 
         const char* BufPtr() const
         {
-            return buf + off;
+            return recv_buf + off;
         }
 
         int BufLen() const
@@ -770,8 +761,8 @@ TEST_CASE("SPT with IPC")
                 off += strnlen(BufPtr(), BufLen()) + 1;
             if (BufLen() <= 0) {
                 off = 0;
-                recvLen = recv(sock, buf, sizeof buf, 0);
-                if (recvLen < 0 || recvLen >= sizeof buf)
+                recvLen = recv(sock, recv_buf, sizeof recv_buf, 0);
+                if (recvLen < 0 || recvLen >= sizeof recv_buf)
                     SKIP("recv failed (" << recvLen << ")");
             }
         }
@@ -779,7 +770,7 @@ TEST_CASE("SPT with IPC")
         void RecvAck()
         {
             NextRecvMsg();
-            REQUIRE_FALSE(strcmp(BufPtr(), "{\"type\":\"ack\"}"));
+            REQUIRE_FALSE(!!strcmp(BufPtr(), "{\"type\":\"ack\"}"));
         }
 
         ~_TCPConnection()
@@ -821,8 +812,7 @@ TEST_CASE("SPT with IPC")
         if (blue.pos.DistToSqr(orange.pos) < 500 * 500)
             continue;
 
-        PortalPair pp{blue, orange};
-        pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
+        PortalPair pp{blue, orange, PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION};
 
         params.pp = &pp;
         params.ent = Entity::CreatePlayerFromCenter(blue.pos, player_crouched);
@@ -849,21 +839,10 @@ TEST_CASE("SPT with IPC")
         * origin of the map being inbounds in some cases.
         */
 
-        // clang-format off
         Entity tmp_player = Entity::CreatePlayerFromCenter(blue.pos + blue.f, player_crouched);
-        auto& bp = pp.blue.pos; auto& op = pp.orange.pos;
-        auto& ba = pp.blue.ang; auto& oa = pp.orange.ang;
-        conn.SendCmd(
-            "ent_fire orange newlocation \\\"%.9g %.9g %.9g %.9g %.9g %.9g\\\"; "
-            "ent_fire blue   newlocation \\\"%.9g %.9g %.9g %.9g %.9g %.9g\\\"; "
-            "%s",
-            op.x, op.y, op.z, oa.x, oa.y, oa.z,
-            bp.x, bp.y, bp.z, ba.x, ba.y, ba.z,
-            tmp_player.GetSetPosCmd().c_str()
-        );
-        // clang-format on
+        conn.SendCmd(std::format("{}; {}", pp.CreateNewLocationCmd("; ", true), tmp_player.GetSetPosCmd()));
         conn.RecvAck();
-        conn.SendCmd("%s", result.ents[0].GetSetPosCmd().c_str());
+        conn.SendCmd(result.ents[0].GetSetPosCmd());
         conn.RecvAck();
 
         // timescale 1: sleep for 350ms, timescale 20: sleep for 10ms

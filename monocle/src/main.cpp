@@ -129,8 +129,8 @@ static void GenerateResultsDistributionsToFile()
                 RandomAng(rng, (PITCH_YAW_TYPE)std::get<1>(blue_opts), std::get<2>(blue_opts)),
                 RandomPos(rng, rng.next_int(0, 8), std::get<0>(orange_opts)),
                 RandomAng(rng, (PITCH_YAW_TYPE)std::get<1>(orange_opts), std::get<2>(orange_opts)),
+                (PlacementOrder)std::get<0>(misc_opts),
             };
-            pp.CalcTpMatrices((PlacementOrder)std::get<0>(misc_opts));
             Vector ent_pos = pp.blue.pos +
                              pp.blue.r * rng.next_float(-PORTAL_HALF_WIDTH * .5f, PORTAL_HALF_WIDTH * .5f) +
                              pp.blue.u * rng.next_float(-PORTAL_HALF_HEIGHT * .5f, PORTAL_HALF_HEIGHT * .5f);
@@ -261,8 +261,8 @@ static void FindVagIn04()
             {90, rng.next_float(yaw_min, yaw_max), 0},
             {-448, 0.03125, 54.9502},
             {0, 90, 0},
+            PlacementOrder::BLUE_WAS_CLOSED_ORANGE_OPENED,
         };
-        pp.CalcTpMatrices(PlacementOrder::BLUE_WAS_CLOSED_ORANGE_OPENED);
         float r = rng.next_float(-PORTAL_HALF_WIDTH * 0.5f, PORTAL_HALF_WIDTH * 0.5f);
         float u = rng.next_float(-PORTAL_HALF_HEIGHT * 0.5f, PORTAL_HALF_HEIGHT * 0.5f);
 
@@ -283,7 +283,7 @@ static void FindVagIn04()
             continue;
         if (t.x > target_maxs.x || t.y > target_maxs.y || t.z > target_maxs.z)
             continue;
-        pp.PrintNewlocationCmd();
+        printf("%s\n", pp.CreateNewLocationCmd().c_str());
         printf("%s\n", result.ent.GetSetPosCmd().c_str());
         const char* file_name = "04_blue.tga";
         printf("Found portal, generating overlay image\n");
@@ -342,10 +342,10 @@ static void FindComplexChain()
             QAngle{0, rng.next_int(-2, 2) * 90.f, 0},
             pos_space.RandomPtInBox(rng),
             QAngle{0, rng.next_int(-2, 2) * 90.f, 0},
+            PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
         };
         if (pp.blue.pos.DistToSqr(pp.orange.pos) < 200 * 200)
             continue;
-        pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
 
         params.pp = &pp;
         params.ent = Entity::CreatePlayerFromCenter(pp.blue.pos, true);
@@ -360,7 +360,7 @@ static void FindComplexChain()
         if (result.cum_teleports >= -1 && result.cum_teleports <= 1)
             continue;
         printf("iteration %u, %u teleports, %d cum teleports\n", i, result.tp_dirs.size(), result.cum_teleports);
-        pp.PrintNewlocationCmd();
+        printf("%s\n", pp.CreateNewLocationCmd().c_str());
         printf("%s\n", result.ent.GetSetPosCmd().c_str());
         printf("generating overlay image...\n");
         CreateOverlayPortalImage(pp, "complex_chain.tga", 1000, true);
@@ -377,8 +377,8 @@ static void DebugInfinite09Chain()
         QAngle{-0.f, 180.f, 0.f},
         Vector{-127.96875f, -191.24300f, 182.03125f},
         QAngle{0.f, 0.f, 0.f},
+        PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED,
     };
-    pp.CalcTpMatrices(PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED);
 
     TeleportChainParams params{
         &pp,
@@ -403,10 +403,10 @@ static void CreateSpinAnimation()
             QAngle{rng.next_float(-180.f, 180.f), -180.f, 0},
             pos_space.RandomPtInBox(rng),
             QAngle{rng.next_float(-180.f, 180.f), rng.next_float(-180.f, 180.f), 0},
+            PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
         };
         if (pp.blue.pos.DistToSqr(pp.orange.pos) < 100 * 100)
             continue;
-        pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
 
         params.pp = &pp;
         params.ent = Entity::CreatePlayerFromCenter(pp.blue.pos + pp.blue.r, true);
@@ -423,8 +423,7 @@ static void CreateSpinAnimation()
         if (result.max_tps_exceeded || result.cum_teleports != -1)
             continue;
         for (int i = -180; i < 180; i++) {
-            PortalPair pp2{pp.blue.pos, {pp.blue.ang.x, (float)i, 0}, pp.orange.pos, pp.orange.ang};
-            pp2.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
+            PortalPair pp2{pp.blue.pos, {pp.blue.ang.x, (float)i, 0}, pp.orange.pos, pp.orange.ang, pp.order};
             char name[32];
             sprintf(name, "spin_anim/ang_%03d.tga", (360 + (i % 360)) % 360);
             CreateOverlayPortalImage(pp2, name, 350, true);
@@ -446,10 +445,10 @@ static void FindInfiniteChain()
             QAngle{0, rng.next_int(-2, 2) * 90.f, 0},
             pos_space.RandomPtInBox(rng),
             QAngle{0, rng.next_int(-2, 2) * 90.f, 0},
+            PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
         };
         if (pp.blue.pos.DistToSqr(pp.orange.pos) < 100 * 100)
             continue;
-        pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
 
         params.pp = &pp;
         params.ent = Entity::CreatePlayerFromCenter(pp.blue.pos, true);
@@ -460,7 +459,7 @@ static void FindInfiniteChain()
 
         if (!result.max_tps_exceeded)
             continue;
-        pp.PrintNewlocationCmd();
+        printf("%s\n", pp.CreateNewLocationCmd().c_str());
         printf("%s\n", params.ent.GetSetPosCmd().c_str());
         break;
     }
@@ -479,10 +478,10 @@ static void FindFiniteChainThatGivesNFE()
             QAngle{0, rng.next_int(-2, 2) * 90.f, 0},
             pos_space.RandomPtInBox(rng),
             QAngle{0, rng.next_int(-2, 2) * 90.f, 0},
+            PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
         };
         if (pp.blue.pos.DistToSqr(pp.orange.pos) < 100 * 100)
             continue;
-        pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
 
         params.pp = &pp;
         params.ent = Entity::CreatePlayerFromCenter(pp.blue.pos, true);
@@ -500,7 +499,7 @@ static void FindFiniteChainThatGivesNFE()
         if (!plane_dist.pt_was_behind_portal)
             continue;
         printf("found chain of length %u on iteration %d\n", result.tp_dirs.size(), i);
-        pp.PrintNewlocationCmd();
+        printf("%s\n", pp.CreateNewLocationCmd().c_str());
         printf("%s\n", Entity::CreatePlayerFromCenter(result.ents[0].GetCenter(), true).GetSetPosCmd().c_str());
         break;
     }
@@ -647,5 +646,5 @@ int main()
 {
     SyncFloatingPointControlWord();
 
-    FindVagIn09EleTop();
+    FindKnownVagIn11();
 }
