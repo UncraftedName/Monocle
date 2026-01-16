@@ -435,7 +435,6 @@ struct PortalPair {
     // sets b_to_o & o_to_b
     void CalcTpMatrices(PlacementOrder order);
 
-    // TeleportTouchingEntity (if player, assumes they are crouched)
     Entity Teleport(const Entity& ent, bool tp_from_blue) const;
     Vector Teleport(const Vector& pt, bool tp_from_blue) const;
 

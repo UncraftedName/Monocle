@@ -541,8 +541,7 @@ TEST_CASE("Teleport chain results in 6 teleports (cum=-2)")
                     [[fallthrough]];
                 case 1:
                     REQUIRE(result.tp_dirs[0] == true);
-                    REQUIRE_THAT(result.ents[1].GetCenter().DistTo(pp.orange.pos),
-                                 Catch::Matchers::WithinAbs(0, 15.f));
+                    REQUIRE_THAT(result.ents[1].GetCenter().DistTo(pp.orange.pos), Catch::Matchers::WithinAbs(0, 15.f));
                     REQUIRE(!!result.portal_plane_diffs[1].is_valid);
                     REQUIRE(result.portal_plane_diffs[1].ax == 0);
                     REQUIRE(!!result.portal_plane_diffs[1].pt_was_behind_portal);
@@ -695,8 +694,9 @@ TEST_CASE("00 AAG")
 * - noclip and crouch (with toggle duck)
 * - run the tests
 * 
-* If this fails on the first iteration, try running again. Sometimes the relevant commands don't
-* get sent to SPT quickly enough before host_timescale is set.
+* TODO: figure out how to handle the standing case. It's possible for us to end up with portals
+* that give us exit velocity and teleport us back into the entry portal. Now that I think about it,
+* this is probably possible for the crouched case as well.
 */
 TEST_CASE("SPT with IPC")
 {
@@ -790,8 +790,20 @@ TEST_CASE("SPT with IPC")
     } conn{};
 
     conn.SendCmd(
-        "sv_cheats 1; spt_prevent_vag_crash 1; spt_focus_nosleep 1; spt_noclip_noslowfly 1; host_timescale 20");
+        "sv_cheats 1; spt_prevent_vag_crash 1; spt_focus_nosleep 1; spt_noclip_noslowfly 1; host_timescale 20; "
+        "spt_ipc_properties 1 m_fFlags");
     conn.RecvAck();
+    conn.NextRecvMsg();
+
+    int player_flags;
+    int n_args = _snscanf_s(conn.BufPtr(),
+                            conn.BufLen(),
+                            "{\"entity\":{\"m_fFlags\":%d},\"exists\":true,\"type\":\"ent\"}",
+                            &player_flags);
+    REQUIRE(n_args == 1);
+
+    bool player_crouched = player_flags & 2;
+
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
 
     small_prng rng;
@@ -813,7 +825,7 @@ TEST_CASE("SPT with IPC")
         pp.CalcTpMatrices(PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION);
 
         params.pp = &pp;
-        params.ent = Entity::CreatePlayerFromCenter(blue.pos, true);
+        params.ent = Entity::CreatePlayerFromCenter(blue.pos, player_crouched);
         params.n_max_teleports = 3;
 
         GenerateTeleportChain(params, result);
@@ -838,7 +850,7 @@ TEST_CASE("SPT with IPC")
         */
 
         // clang-format off
-        Entity tmp_player = Entity::CreatePlayerFromCenter(blue.pos + blue.f, true);
+        Entity tmp_player = Entity::CreatePlayerFromCenter(blue.pos + blue.f, player_crouched);
         auto& bp = pp.blue.pos; auto& op = pp.orange.pos;
         auto& ba = pp.blue.ang; auto& oa = pp.orange.ang;
         conn.SendCmd(
@@ -857,24 +869,29 @@ TEST_CASE("SPT with IPC")
         // timescale 1: sleep for 350ms, timescale 20: sleep for 10ms
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-        // TODO handle if player is standing
         conn.SendCmd("spt_ipc_properties 1 m_vecOrigin");
         conn.RecvAck();
         conn.NextRecvMsg();
         Vector actual_player_pos{};
-        int n_args = _snscanf_s(conn.BufPtr(),
-                                conn.BufLen(),
-                                "{\"entity\":{"
-                                "\"m_vecOrigin[0]\":%f,\"m_vecOrigin[1]\":%f,\"m_vecOrigin[2]\":%f"
-                                "},\"exists\":true,\"type\":\"ent\"}",
-                                &actual_player_pos.x,
-                                &actual_player_pos.y,
-                                &actual_player_pos.z);
+        n_args = _snscanf_s(conn.BufPtr(),
+                            conn.BufLen(),
+                            "{\"entity\":{"
+                            "\"m_vecOrigin[0]\":%f,\"m_vecOrigin[1]\":%f,\"m_vecOrigin[2]\":%f"
+                            "},\"exists\":true,\"type\":\"ent\"}",
+                            &actual_player_pos.x,
+                            &actual_player_pos.y,
+                            &actual_player_pos.z);
         REQUIRE(n_args == 3);
 
         INFO("iteration " << iteration);
         INFO("expected " << (result.cum_teleports == -1 ? "VAG" : "normal teleport"));
-        REQUIRE(actual_player_pos.DistToSqr(result.ent.player.origin) < 100 * 100);
+        if (player_crouched || !result.ent.player.crouched) {
+            REQUIRE(actual_player_pos.DistToSqr(result.ent.player.origin) < 100 * 100);
+        } else {
+            // the AG force crouched the player and the above estimate may be off
+            Entity better_ent_estimate = Entity::CreatePlayerFromCenter(result.ent.GetCenter(), false);
+            REQUIRE(actual_player_pos.DistToSqr(better_ent_estimate.player.origin) < 100 * 100);
+        }
         printf("iteration %d: %s", iteration, result.cum_teleports == -1 ? "VAG\n" : "Normal teleport\n");
         iteration++;
     }
