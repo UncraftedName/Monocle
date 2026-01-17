@@ -691,6 +691,93 @@ TEST_CASE("00 AAG")
                  Catch::Matchers::WithinAbs(0, 2.f));
 }
 
+class SptIpcConn {
+
+    const USHORT spt_port = 27182;
+    const char* ip_addr = "127.0.0.1";
+
+    // clang-format off
+    struct _WinSock {
+        int _ret;
+        WSADATA wsadata;
+        _WinSock() { _ret = WSAStartup(MAKEWORD(2, 2), &wsadata); if (_ret != 0) SKIP("WSAStartup failed");}
+        ~_WinSock() { if (_ret == 0) WSACleanup(); }
+    } winsock{};
+    // clang-format on
+
+    SOCKET sock = INVALID_SOCKET;
+    bool _cleanup_sock = false;
+    char recv_buf[1024]{};
+    int off = 0;
+    int recvLen = 0;
+
+public:
+    SptIpcConn()
+    {
+        sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        if (sock == INVALID_SOCKET) {
+            SKIP("Socket creation failed");
+            return;
+        }
+
+        sockaddr_in server_addr{};
+        server_addr.sin_family = AF_INET;
+        inet_pton(AF_INET, ip_addr, &server_addr.sin_addr.s_addr);
+        server_addr.sin_port = htons(spt_port);
+
+        _cleanup_sock = true;
+        if (connect(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
+            SKIP("Failed to connect to SPT");
+    }
+
+    ~SptIpcConn()
+    {
+        if (_cleanup_sock)
+            closesocket(sock);
+    }
+
+    void SendCmd(const std::string& s)
+    {
+        recvLen = -1;
+        std::string send_str = std::format("{{\"type\":\"cmd\",\"cmd\":\"{}\"}}", s);
+        int ret = send(sock, send_str.c_str(), send_str.size() + 1, 0);
+        if (ret == SOCKET_ERROR)
+            SKIP("send failed (" << ret << ")");
+    }
+
+    const char* BufPtr() const
+    {
+        return recv_buf + off;
+    }
+
+    int BufLen() const
+    {
+        return recvLen - off;
+    }
+
+    void NextRecvMsg()
+    {
+        if (BufLen() > 0)
+            off += strnlen(BufPtr(), BufLen()) + 1;
+        if (BufLen() <= 0) {
+            off = 0;
+            recvLen = recv(sock, recv_buf, sizeof recv_buf, 0);
+            if (recvLen < 0 || recvLen >= sizeof recv_buf)
+                SKIP("recv failed (" << recvLen << ")");
+        }
+    }
+
+    void RecvAck()
+    {
+        NextRecvMsg();
+        REQUIRE_FALSE(!!strcmp(BufPtr(), "{\"type\":\"ack\"}"));
+    }
+};
+
+struct SptIpcConnFixture {
+    mutable SptIpcConn conn;
+};
+
 /*
 * To use:
 * - open the game and load a sufficiently recent version of SPT (anything after 03-2025 work)
@@ -703,88 +790,8 @@ TEST_CASE("00 AAG")
 * that give us exit velocity and teleport us back into the entry portal. Now that I think about it,
 * this is probably possible for the crouched case as well.
 */
-TEST_CASE("SPT with IPC")
+TEST_CASE_PERSISTENT_FIXTURE(SptIpcConnFixture, "SPT with IPC")
 {
-    const USHORT spt_port = 27182;
-
-    // clang-format off
-    struct _WinSock {
-        int _ret;
-        WSADATA wsadata;
-        _WinSock() { _ret = WSAStartup(MAKEWORD(2, 2), &wsadata); if (_ret != 0) SKIP("WSAStartup failed");}
-        ~_WinSock() { if (_ret == 0) WSACleanup(); }
-    } winsock{};
-    // clang-format on
-
-    struct _TCPConnection {
-        SOCKET sock = INVALID_SOCKET;
-        bool _cleanup_sock = false;
-        char recv_buf[1024]{};
-        int off = 0;
-        int recvLen = 0;
-
-        _TCPConnection()
-        {
-            sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-            if (sock == INVALID_SOCKET) {
-                SKIP("Socket creation failed");
-                return;
-            }
-
-            sockaddr_in server_addr{};
-            server_addr.sin_family = AF_INET;
-            inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr.s_addr);
-            server_addr.sin_port = htons(spt_port);
-
-            _cleanup_sock = true;
-            if (connect(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
-                SKIP("Failed to connect to SPT");
-        }
-
-        void SendCmd(const std::string& s)
-        {
-            recvLen = -1;
-            std::string send_str = std::format("{{\"type\":\"cmd\",\"cmd\":\"{}\"}}", s);
-            int ret = send(sock, send_str.c_str(), send_str.size() + 1, 0);
-            if (ret == SOCKET_ERROR)
-                SKIP("send failed (" << ret << ")");
-        }
-
-        const char* BufPtr() const
-        {
-            return recv_buf + off;
-        }
-
-        int BufLen() const
-        {
-            return recvLen - off;
-        }
-
-        void NextRecvMsg()
-        {
-            if (BufLen() > 0)
-                off += strnlen(BufPtr(), BufLen()) + 1;
-            if (BufLen() <= 0) {
-                off = 0;
-                recvLen = recv(sock, recv_buf, sizeof recv_buf, 0);
-                if (recvLen < 0 || recvLen >= sizeof recv_buf)
-                    SKIP("recv failed (" << recvLen << ")");
-            }
-        }
-
-        void RecvAck()
-        {
-            NextRecvMsg();
-            REQUIRE_FALSE(!!strcmp(BufPtr(), "{\"type\":\"ack\"}"));
-        }
-
-        ~_TCPConnection()
-        {
-            if (_cleanup_sock)
-                closesocket(sock);
-        }
-    } conn{};
-
     conn.SendCmd(
         "sv_cheats 1; spt_prevent_vag_crash 1; spt_focus_nosleep 1; spt_noclip_noslowfly 1; host_timescale 20; "
         "spt_ipc_properties 1 m_fFlags");
