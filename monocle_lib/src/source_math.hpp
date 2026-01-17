@@ -30,12 +30,14 @@ public:
             (_EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW | _EM_ZERODIVIDE | _EM_INVALID | _EM_DENORMAL) |
             (_RC_NEAR | _PC_53 | _IC_PROJECTIVE);
         errno_t err = _controlfp_s(&old_control, new_control, ~0u);
+        (void)err;
         MON_ASSERT(!err);
     }
 
     ~MonocleFloatingPointScope()
     {
         errno_t err = _controlfp_s(nullptr, old_control, ~0u);
+        (void)err;
         MON_ASSERT(!err);
     }
 };

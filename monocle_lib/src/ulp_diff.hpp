@@ -7,14 +7,14 @@
 
 namespace mon::ulp {
 
-float UlpSizeF(float f)
+inline float UlpSizeF(float f)
 {
     f = std::fabsf(f);
     return std::nextafterf(f, INFINITY) - f;
 }
 
 // difference between two floats in ulps
-uint32_t UlpDiffF(float f1, float f2)
+inline uint32_t UlpDiffF(float f1, float f2)
 {
     if (!std::isfinite(f1) || !std::isfinite(f2))
         return UINT32_MAX;
@@ -25,14 +25,14 @@ uint32_t UlpDiffF(float f1, float f2)
     return i1 > i2 ? i1 - i2 : i2 - i1;
 }
 
-float DoubleToFloatRoundDown(double value)
+inline float DoubleToFloatRoundDown(double value)
 {
     float f = (float)value;
     return f > value ? std::nextafterf(f, -INFINITY) : f;
 }
 
 // fractional difference between double & float
-double UlpDiffD(double ref, float f)
+inline double UlpDiffD(double ref, float f)
 {
     if (!std::isfinite(ref) || !std::isfinite(f))
         return INFINITY;

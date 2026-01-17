@@ -1,9 +1,12 @@
 #include "catch_amalgamated.hpp"
 #include "source_math.hpp"
+#include "source_math_double.hpp"
+#include "source_math_double_compare.hpp"
 #include "vag_logic.hpp"
 #include "prng.hpp"
 
 #define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 
 #include <windows.h>
 #include <winsock2.h>
@@ -877,3 +880,77 @@ TEST_CASE("SPT with IPC")
         iteration++;
     }
 }
+
+class UlpDiffCompareTest {
+public:
+    template <typename FT, typename DT>
+    static void RequireStructTolerance(const char* unique_struct_name,
+                                       const FT& f,
+                                       const DT& d,
+                                       double max_rel_off,
+                                       double max_abs_off)
+    {
+        static_assert(sizeof(FT) / sizeof(float) == sizeof(DT) / sizeof(double));
+        DYNAMIC_SECTION("comparing '" << unique_struct_name << "': '" << typeid(FT).name() << "' with '"
+                                      << typeid(DT).name() << "'")
+        {
+            for (size_t i = 0; i < sizeof(FT) / sizeof(float); i++) {
+                DYNAMIC_SECTION("struct field: " << i)
+                {
+                    float fv = ((const float*)&f)[i];
+                    double dv = ((const double*)&d)[i];
+                    double ulp_diff = mon::ulp::UlpDiffD(dv, fv);
+                    INFO("float val: " << std::format(MON_F_FMT, fv) << ", double val: " << std::format(MON_D_FMT, dv)
+                                       << ", ulp diff: " << std::format("{:.2f}", ulp_diff));
+
+                    if (std::fabsf(fv) <= 0.1f) {
+                        INFO("using absolute comparison");
+                        REQUIRE_THAT(fv, Catch::Matchers::WithinAbs(dv, max_abs_off));
+                    } else {
+                        INFO("using relative comparison");
+                        REQUIRE_THAT(fv, Catch::Matchers::WithinRel(dv, max_rel_off));
+                    }
+                }
+            }
+        }
+    }
+
+    void TestCase()
+    {
+        REPEAT_TEST(1000);
+        static small_prng rng;
+        mon::PortalPair pp{
+            RandomPortal(rng),
+            RandomPortal(rng),
+            (mon::PlacementOrder)rng.next_int(0, (int)mon::PlacementOrder::COUNT),
+        };
+        mon::PortalPairD ppd{
+            mon::PortalD{pp.blue.pos, pp.blue.ang},
+            mon::PortalD{pp.orange.pos, pp.orange.ang},
+        };
+
+        INFO(pp.blue.NewLocationCmd("blue"));
+        INFO(pp.orange.NewLocationCmd("orange"));
+
+        for (int i = 0; i < 2; i++) {
+            DYNAMIC_SECTION("portal color: " << (i == 0 ? "blue" : "orange"))
+            {
+                const mon::Portal& p = i == 0 ? pp.blue : pp.orange;
+                const mon::PortalD& pd = i == 0 ? ppd.blue : ppd.orange;
+
+                RequireStructTolerance("portal pos", p.pos, pd.pos, 0, 0);
+                RequireStructTolerance("portal f", p.f, pd.f, 1e-4, 1e-5);
+                RequireStructTolerance("portal r", p.r, pd.r, 1e-4, 1e-5);
+                RequireStructTolerance("portal u", p.u, pd.u, 1e-4, 1e-5);
+                RequireStructTolerance("portal plane", p.plane, pd.plane, 0.001, 0.001);
+                RequireStructTolerance("world to portal", p.mat, pd.mat, 0.001, 0.001);
+
+                const mon::VMatrix& tp = i == 0 ? pp.b_to_o : pp.o_to_b;
+                const mon::VMatrixD& tpd = i == 0 ? ppd.b_to_o : ppd.o_to_b;
+                RequireStructTolerance("teleport matrix", tp, tpd, 0.001, 0.001);
+            }
+        }
+    }
+};
+
+METHOD_AS_TEST_CASE(UlpDiffCompareTest::TestCase, "Double math");
