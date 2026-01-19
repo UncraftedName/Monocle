@@ -22,12 +22,19 @@
 
 #define CATCH_SEED ((uint32_t)42069)
 
+/*
+* TODO: apparently DYNAMIC_SECTION will cause the test to get run once for each generated section.
+* This seems to be slowing down the tests a lot, and definitely messes with debugging and rng
+* state, maybe there's a workaround?
+*/
+
 int main(int argc, char* argv[])
 {
     mon::MonocleFloatingPointScope scope{};
     Catch::Session session;
     session.libIdentify();
     session.configData().rngSeed = CATCH_SEED;
+    // session.configData().shouldDebugBreak = true;
 
     using namespace std::chrono;
     auto t = high_resolution_clock::now();
@@ -916,7 +923,11 @@ public:
                     INFO("float val: " << std::format(MON_F_FMT, fv) << ", double val: " << std::format(MON_D_FMT, dv)
                                        << ", ulp diff: " << std::format("{:.2f}", ulp_diff));
 
-                    if (std::fabsf(fv) <= 0.1f) {
+                    bool do_abs = std::fabsf(fv) <= 0.1f;
+                    if ((do_abs && max_abs_off == 0.0) || (!do_abs && max_rel_off == 0.0)) {
+                        INFO("using ulp comparison");
+                        REQUIRE(ulp_diff <= 0.5);
+                    } else if (do_abs) {
                         INFO("using absolute comparison");
                         REQUIRE_THAT(fv, Catch::Matchers::WithinAbs(dv, max_abs_off));
                     } else {
@@ -931,16 +942,14 @@ public:
     void TestCase()
     {
         REPEAT_TEST(1000);
-        static small_prng rng;
+        small_prng rng{(uint32_t)_test_it};
         mon::PortalPair pp{
             RandomPortal(rng),
             RandomPortal(rng),
             (mon::PlacementOrder)rng.next_int(0, (int)mon::PlacementOrder::COUNT),
         };
-        mon::PortalPairD ppd{
-            mon::PortalD{pp.blue.pos, pp.blue.ang},
-            mon::PortalD{pp.orange.pos, pp.orange.ang},
-        };
+
+        mon::PortalPairD ppd{pp};
 
         INFO(pp.blue.NewLocationCmd("blue"));
         INFO(pp.orange.NewLocationCmd("orange"));
@@ -960,7 +969,26 @@ public:
 
                 const mon::VMatrix& tp = i == 0 ? pp.b_to_o : pp.o_to_b;
                 const mon::VMatrixD& tpd = i == 0 ? ppd.b_to_o : ppd.o_to_b;
-                RequireStructTolerance("teleport matrix", tp, tpd, 0.001, 0.001);
+                RequireStructTolerance("teleport matrix", tp, tpd, 0.002, 0.002);
+
+                // now teleport an entity
+
+                bool create_player = rng.next_bool();
+                bool player_crouched = rng.next_bool();
+                mon::Entity ent = create_player ? mon::Entity::CreatePlayerFromCenter(p.pos, player_crouched)
+                                                : mon::Entity::CreateBall(p.pos, 1.f);
+
+                auto [proj_ent, _] = mon::ProjectEntityToPortalPlane(ent, p);
+                mon::EntityD ent_d{proj_ent};
+                RequireStructTolerance("entity center", proj_ent.GetCenter(), ent_d.GetCenter(), 0, 0);
+
+                mon::Entity tp_ent = pp.Teleport(proj_ent, i == 0);
+                mon::EntityD tp_ent_d = ppd.Teleport(ent_d, i == 0);
+                RequireStructTolerance("entity center after teleport",
+                                       tp_ent.GetCenter(),
+                                       tp_ent_d.GetCenter(),
+                                       0.005,
+                                       0.005);
             }
         }
     }

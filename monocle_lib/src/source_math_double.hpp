@@ -11,6 +11,8 @@
 * This file replicates portal creation code, but with doubles. I take this as ground truth to
 * compare against the float code. If the code here is confusing, look at the floating point
 * version for a reference.
+* 
+* All constructors that create values from the float versions are marked as explicit.
 */
 
 namespace mon {
@@ -20,7 +22,7 @@ struct VectorD {
 
     constexpr VectorD() {}
     constexpr VectorD(double x, double y, double z) : x{x}, y{y}, z{z} {}
-    constexpr VectorD(const Vector& v) : x{v.x}, y{v.y}, z{v.z} {}
+    constexpr explicit VectorD(const Vector& v) : x{v.x}, y{v.y}, z{v.z} {}
 
     constexpr double Dot(const VectorD& v) const
     {
@@ -58,7 +60,7 @@ struct VectorD {
 struct QAngleD {
     double x, y, z;
 
-    constexpr QAngleD(const QAngle& a) : x{a.x}, y{a.y}, z{a.z} {}
+    constexpr explicit QAngleD(const QAngle& a) : x{a.x}, y{a.y}, z{a.z} {}
 
     double& operator[](int i)
     {
@@ -220,6 +222,12 @@ struct EntityD {
 
     EntityD() {};
 
+    explicit EntityD(const Entity& ent)
+    {
+        *this = ent.is_player ? EntityD::CreatePlayerFromOrigin(VectorD{ent.player.origin}, ent.player.crouched)
+                              : EntityD::CreateBall(VectorD{ent.ball.center}, ent.ball.radius);
+    }
+
     static EntityD CreatePlayerFromOrigin(VectorD origin, bool crouched)
     {
         EntityD ent;
@@ -231,7 +239,7 @@ struct EntityD {
 
     static EntityD CreatePlayerFromCenter(VectorD center, bool crouched)
     {
-        return CreatePlayerFromOrigin(center - (crouched ? PLAYER_CROUCH_HALF : PLAYER_STAND_HALF), crouched);
+        return CreatePlayerFromOrigin(center - VectorD{crouched ? PLAYER_CROUCH_HALF : PLAYER_STAND_HALF}, crouched);
     }
 
     static EntityD CreateBall(VectorD center, float radius)
@@ -246,7 +254,7 @@ struct EntityD {
     VectorD GetCenter() const
     {
         if (is_player)
-            return player.origin + (player.crouched ? PLAYER_CROUCH_HALF : PLAYER_STAND_HALF);
+            return player.origin + VectorD{player.crouched ? PLAYER_CROUCH_HALF : PLAYER_STAND_HALF};
         return ball.center;
     }
 };
@@ -259,12 +267,14 @@ struct PortalD {
     VPlaneD plane;
     matrix3x4_t_d mat;
 
-    PortalD(VectorD pos, QAngleD ang) : pos{pos}, ang{ang}
+    PortalD(const VectorD& pos, const QAngleD& ang) : pos{pos}, ang{ang}
     {
         AngleVectorsD(ang, &f, &r, &u);
         plane = {f, f.Dot(pos)};
         AngleMatrixD(ang, pos, mat);
     }
+
+    explicit PortalD(const Portal& p) : PortalD{VectorD{p.pos}, QAngleD{p.ang}} {}
 };
 
 struct PortalPairD {
@@ -275,6 +285,8 @@ struct PortalPairD {
     {
         CalcTpMats();
     }
+
+    explicit PortalPairD(const PortalPair& pp) : PortalPairD{PortalD{pp.blue}, PortalD{pp.orange}} {}
 
     void CalcTpMats()
     {
