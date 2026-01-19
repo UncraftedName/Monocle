@@ -5,6 +5,7 @@
 #include "ctpl_stl.h"
 #include "time_scope.hpp"
 #include "vag_search.hpp"
+#include "source_math_double_compare.hpp"
 
 #include <iostream>
 #include <algorithm>
@@ -636,8 +637,12 @@ static void FindKnownVagIn11()
     };
     small_prng rng{0};
     auto sr = ss.FindVag(rng, 1000000);
-    if (sr)
+    if (sr) {
         sr->print();
+        ss.params.pp = &sr->pp;
+        std::string dump = mon::ulp::TeleportChainCompareToCsv(ss.params, sr->chain_result);
+        std::ofstream{"chain_dump.csv"} << dump;
+    }
 }
 
 int main()

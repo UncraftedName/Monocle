@@ -128,7 +128,7 @@ struct SearchSpace {
     bool tp_from_blue;
     bool tp_player;
 
-    TeleportChainParams params; // initialized here
+    TeleportChainParams params; // initialized here, NOTE: pp will point to garbag
 
     std::optional<SearchResult> FindVag(small_prng& rng, int n_iterations)
     {

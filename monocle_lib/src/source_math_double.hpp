@@ -109,6 +109,12 @@ struct matrix3x4_t_d {
         MON_ASSERT(i >= 0 && i < 3);
         return m_flMatVal[i];
     }
+
+    const double* operator[](int i) const
+    {
+        MON_ASSERT(i >= 0 && i < 3);
+        return m_flMatVal[i];
+    }
 };
 
 inline void AngleMatrixD(const QAngleD& ang, const VectorD& pos, matrix3x4_t_d& m)
@@ -142,12 +148,12 @@ struct VMatrixD {
           }
     {}
 
-    inline double* operator[](int i)
+    double* operator[](int i)
     {
         return m[i];
     }
 
-    inline const double* operator[](int i) const
+    const double* operator[](int i) const
     {
         return m[i];
     }

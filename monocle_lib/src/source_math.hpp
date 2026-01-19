@@ -170,6 +170,12 @@ struct matrix3x4_t {
         return m_flMatVal[i];
     }
 
+    const float* operator[](int i) const 
+    {
+        MON_ASSERT(i >= 0 && i < 3);
+        return m_flMatVal[i];
+    }
+
     std::string DebugToString() const;
 };
 
@@ -190,7 +196,12 @@ struct VMatrix {
           }
     {}
 
-    inline float* operator[](int i)
+    float* operator[](int i)
+    {
+        return m[i];
+    }
+
+    const float* operator[](int i) const
     {
         return m[i];
     }
