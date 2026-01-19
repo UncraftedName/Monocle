@@ -711,12 +711,15 @@ class SptIpcConn {
     int off = 0;
     int recvLen = 0;
 
+    // TODO there's seems to be a bug in Catch2 when skipping from a class fixture ctor, update Catch2 and see if that's fixed!
+    std::optional<std::string> defer_skip_message;
+
 public:
     SptIpcConn()
     {
         sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (sock == INVALID_SOCKET) {
-            SKIP("Socket creation failed");
+            defer_skip_message = "Socket creation failed";
             return;
         }
 
@@ -727,7 +730,7 @@ public:
 
         _cleanup_sock = true;
         if (connect(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
-            SKIP("Failed to connect to SPT");
+            defer_skip_message = "Failed to connect to SPT";
     }
 
     ~SptIpcConn()
@@ -738,6 +741,9 @@ public:
 
     void SendCmd(const std::string& s)
     {
+        if (defer_skip_message.has_value())
+            SKIP(*defer_skip_message);
+
         recvLen = -1;
         std::string send_str = std::format("{{\"type\":\"cmd\",\"cmd\":\"{}\"}}", s);
         int ret = send(sock, send_str.c_str(), send_str.size() + 1, 0);
