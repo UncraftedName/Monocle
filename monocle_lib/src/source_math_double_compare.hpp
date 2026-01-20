@@ -80,8 +80,8 @@ inline std::string TeleportChainCompareToCsv(const TeleportChainParams& params, 
         write_row(prefix + "plane_d", p.plane.d, pd.plane.d, is_blue);
         write_mat(prefix + "mat", &p.mat[0][0], &pd.mat[0][0], 3, 4, is_blue);
 
-        const VMatrix& vm = is_blue ? pp.o_to_b : pp.b_to_o;
-        const VMatrixD& vmd = is_blue ? ppd.o_to_b : ppd.b_to_o;
+        const VMatrix& vm = is_blue ? pp.b_to_o : pp.o_to_b;
+        const VMatrixD& vmd = is_blue ? ppd.b_to_o : ppd.o_to_b;
         write_mat(prefix + "tp_mat", &vm[0][0], &vmd[0][0], 4, 4, is_blue);
     }
 
