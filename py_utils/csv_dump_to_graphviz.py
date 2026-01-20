@@ -91,7 +91,7 @@ class HtmlCompareTable(HtmlMatrix):
             diff_str_entry = "{:.2g} abs".format(df_row["abs_diff"])
         self._str_entries[2][1].set_entry(r, c, diff_str_entry)
 
-        if df_row["ulp_diff"] > 0.5:
+        if df_row["ulp_diff"] >= 0.5:
             self.set_entry_high_err(r, c)
 
     def set_entry_high_err(self, r, c):
