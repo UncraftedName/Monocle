@@ -18,8 +18,11 @@ inline uint32_t UlpDiffF(float f1, float f2)
 {
     if (!std::isfinite(f1) || !std::isfinite(f2))
         return UINT32_MAX;
-    if (std::signbit(f1) != std::signbit(f2))
+    if (std::signbit(f1) != std::signbit(f2)) {
+        if (std::fabsf(f1) == 0.f && std::fabsf(f2) == 0.f)
+            return 0; // handle 0.f == -0.f otherwise we get 1
         return UlpDiffF(0.f, std::fabsf(f1)) + UlpDiffF(0.f, std::fabsf(f2)) + 1;
+    }
     uint32_t i1 = *(uint32_t*)&f1;
     uint32_t i2 = *(uint32_t*)&f2;
     return i1 > i2 ? i1 - i2 : i2 - i1;
