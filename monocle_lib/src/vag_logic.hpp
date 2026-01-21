@@ -1,10 +1,10 @@
 #pragma once
 
 #include "source_math.hpp"
+#include "tp_ring_queue.hpp"
 
 #include <stdint.h>
 #include <vector>
-#include <deque>
 #include <string>
 #include <memory>
 #include <utility>
@@ -74,7 +74,7 @@ struct TeleportChainParams {
 struct TeleportChainInternalState {
 
     using queue_entry = int;
-    using queue_type = std::deque<queue_entry>;
+    using queue_type = RingQueue<queue_entry, 8>;
 
     using portal_type = queue_entry;
     static constexpr queue_entry FUNC_RECHECK_COLLISION = 0;

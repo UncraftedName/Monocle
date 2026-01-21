@@ -4,6 +4,7 @@
 #include "source_math_double_compare.hpp"
 #include "vag_logic.hpp"
 #include "prng.hpp"
+#include "tp_ring_queue.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -15,6 +16,7 @@
 #include <chrono>
 #include <thread>
 #include <format>
+#include <queue>
 
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "Mswsock.lib")
@@ -58,6 +60,77 @@ static mon::Portal RandomPortal(small_prng& rng)
         mon::Vector{rng.next_float(p_min, p_max), rng.next_float(p_min, p_max), rng.next_float(p_min, p_max)},
         mon::QAngle{rng.next_float(a_min, a_max), rng.next_float(a_min, a_max), rng.next_float(a_min, a_max)},
     };
+}
+
+using tp_queue = mon::RingQueue<mon::TeleportChainInternalState::queue_entry, 8>;
+using ref_std_queue = std::deque<tp_queue::value_type>;
+
+TEST_CASE("Teleport queue push and pop all")
+{
+    tp_queue tpq;
+    ref_std_queue tpq_ref;
+
+    REQUIRE(tpq.empty());
+
+    size_t num_elems = GENERATE(1, 2, 4, 100, 5000);
+
+    for (size_t n_iters = 0; n_iters < 3; n_iters++) {
+        DYNAMIC_SECTION("push iteration " << n_iters)
+        {
+            for (size_t i = 0; i < num_elems; i++) {
+                tp_queue::value_type val = i * 69420;
+                tpq.push_back(val);
+                tpq_ref.push_back(val);
+
+                REQUIRE(tpq.size() == tpq_ref.size());
+            }
+
+            for (size_t i = 0; i < num_elems; i++) {
+                REQUIRE(tpq.front() == tpq_ref.front());
+                tpq.pop_front();
+                tpq_ref.pop_front();
+                REQUIRE(tpq.size() == tpq_ref.size());
+            }
+
+            REQUIRE(tpq.empty());
+        }
+    }
+}
+
+TEST_CASE("Teleport queue push and pop some")
+{
+    tp_queue tpq;
+    ref_std_queue tpq_ref;
+    REQUIRE(tpq.empty());
+
+    size_t num_elems_push = GENERATE(3, 4, 100, 5000);
+    size_t num_elems_pop = num_elems_push / 3;
+    bool clear_elements_after_pops = GENERATE(0, 1);
+
+    for (size_t n_iters = 0; n_iters < 3; n_iters++) {
+        for (size_t i = 0; i < num_elems_push; i++) {
+            tp_queue::value_type val = i * 69420;
+            tpq.push_back(val);
+            tpq_ref.push_back(val);
+            REQUIRE(tpq.size() == tpq_ref.size());
+        }
+
+        for (size_t i = 0; i < num_elems_pop; i++) {
+            REQUIRE(tpq.front() == tpq_ref.front());
+            tpq.pop_front();
+            tpq_ref.pop_front();
+            REQUIRE(tpq.size() == tpq_ref.size());
+        }
+
+        if (clear_elements_after_pops) {
+            tpq.clear();
+            tpq_ref.clear();
+            REQUIRE(tpq.empty());
+        }
+    }
+
+    tpq.clear();
+    REQUIRE(tpq.empty());
 }
 
 TEST_CASE("ShouldTeleport (no portal hole check)")
