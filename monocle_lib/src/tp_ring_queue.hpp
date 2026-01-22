@@ -7,7 +7,7 @@
 
 namespace mon {
 
-// a simple ring buffer queue for basic POD types
+// a simple ring buffer queue for basic POD types, mostly a practice exercise to not use std::deque
 template <typename T, size_t STATIC_BUF_SIZE>
 class RingQueue {
 
@@ -40,6 +40,33 @@ public:
     using value_type = T;
 
     RingQueue() = default;
+
+    RingQueue(RingQueue&& o) : mem{std::move(o.mem)}, index_mask{o.index_mask}, first{o.first}, n_elems{o.n_elems}
+    {
+        if (&o != this && mem.get() == o.init_arr.data()) {
+            std::copy_n(&mem[first], n_elems, &init_arr[first]);
+            mem.release();
+            mem = std::unique_ptr<T[]>(init_arr.data());
+        }
+    };
+
+    RingQueue& operator=(RingQueue&& o)
+    {
+        if (this == &o)
+            return *this;
+        if (mem.get() == init_arr.data())
+            mem.release();
+        mem = std::move(o.mem);
+        index_mask = o.index_mask;
+        first = o.first;
+        n_elems = o.n_elems;
+        if (mem.get() == o.init_arr.data()) {
+            std::copy_n(&mem[first], n_elems, &init_arr[first]);
+            mem.release();
+            mem = std::unique_ptr<T[]>(init_arr.data());
+        }
+        return *this;
+    }
 
     ~RingQueue()
     {

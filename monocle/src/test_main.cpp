@@ -133,6 +133,75 @@ TEST_CASE("Teleport queue push and pop some")
     REQUIRE(tpq.empty());
 }
 
+TEST_CASE("Teleport queue iterators")
+{
+    tp_queue tpq;
+    REQUIRE(tpq.empty());
+    REQUIRE_FALSE(tpq.begin() != tpq.end());
+
+    size_t n_elemspush = GENERATE(1, 4, 5, 20, 100);
+    size_t n_elemspop = n_elemspush / 3;
+
+    for (size_t i = 0; i < n_elemspush; i++)
+        tpq.push_back((int)(i * 69420));
+
+    for (size_t i = 0; i < n_elemspop; i++)
+        tpq.pop_front();
+
+    size_t i = n_elemspop;
+    for (auto it = tpq.begin(); it != tpq.end(); ++it, ++i)
+        REQUIRE(*it == (int)(i * 69420));
+}
+
+TEST_CASE("Teleport queue move constructor")
+{
+    tp_queue tpq;
+    REQUIRE(tpq.empty());
+
+    size_t n_elemspush = GENERATE(0, 1, 4, 8, 24, 1000);
+    size_t n_elemspop = n_elemspush / 3;
+
+    for (size_t i = 0; i < n_elemspush; i++)
+        tpq.push_back((int)(i * 69420));
+
+    for (size_t i = 0; i < n_elemspop; i++)
+        tpq.pop_front();
+
+    size_t n_elems = tpq.size();
+    tp_queue tpq2{std::move(tpq)};
+    REQUIRE(tpq2.size() == n_elems);
+
+    size_t i = n_elemspop;
+    for (auto it = tpq2.begin(); it != tpq2.end(); ++it, ++i)
+        REQUIRE(*it == (int)(i * 69420));
+}
+
+TEST_CASE("Teleport queue move assignment")
+{
+    tp_queue tpq;
+    REQUIRE(tpq.empty());
+
+    size_t n_elemspush = GENERATE(0, 1, 4, 8, 24, 1000);
+    size_t n_elemspop = n_elemspush / 3;
+
+    for (size_t i = 0; i < n_elemspush; i++)
+        tpq.push_back((int)(i * 69420));
+
+    for (size_t i = 0; i < n_elemspop; i++)
+        tpq.pop_front();
+
+    size_t n_elems = tpq.size();
+    tp_queue tpq2;
+    tpq2.push_back(5);
+    tpq2 = std::move(tpq);
+
+    REQUIRE(tpq2.size() == n_elems);
+
+    size_t i = n_elemspop;
+    for (auto it = tpq2.begin(); it != tpq2.end(); ++it, ++i)
+        REQUIRE(*it == (int)(i * 69420));
+}
+
 TEST_CASE("ShouldTeleport (no portal hole check)")
 {
     REPEAT_TEST(1000);
