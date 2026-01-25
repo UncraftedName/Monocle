@@ -3,7 +3,7 @@ set(SRC_FILES
 	src/source_math.cpp
 	src/source_math_strings.cpp
 	src/vag_logic.cpp
-	src/chain_graphviz.cpp
+	src/chain_generation/gv_flow_control.cpp
 )
 
 # Redirect MASM output object file to fix: 'cannot open file : monocle_lib.dir\Debug\/src/source_math.asm.obj'

@@ -99,6 +99,8 @@ struct GenerateTeleportChainImpl {
         result.ents.clear();
         result.portal_plane_diffs.clear();
         result.tp_dirs.clear();
+        if (usrParams.record_flags & TCRF_RECORD_GRAPHVIZ_FLOW_CONTROL)
+            result.graphviz_flow_control.Clear();
     }
 
     template <INTERN::portal_type PORTAL>
@@ -122,21 +124,34 @@ struct GenerateTeleportChainImpl {
         return PORTAL == INTERN::FUNC_TP_BLUE ? usrParams.pp->blue : usrParams.pp->orange;
     }
 
+    void PushToQueue(INTERN::queue_entry fn)
+    {
+        if (usrParams.record_flags & TCRF_RECORD_GRAPHVIZ_FLOW_CONTROL)
+            result.graphviz_flow_control.QueueFunc(fn);
+        st.tp_queue.push_back(fn);
+    }
+
+    auto PopFromQueue()
+    {
+        if (usrParams.record_flags & TCRF_RECORD_GRAPHVIZ_FLOW_CONTROL)
+            result.graphviz_flow_control.DequeueFunc();
+        auto val = st.tp_queue.front();
+        st.tp_queue.pop_front();
+        return val;
+    }
+
     void CallQueued()
     {
         if (result.max_tps_exceeded)
             return;
 
-        st.tp_queue.push_back(-++st.n_queued_nulls);
+        PushToQueue(-++st.n_queued_nulls);
 
-        if (result.graphviz) {
-            result.graphviz->PushCallQueuedNode(st.tp_queue);
-            result.graphviz->SetLastTeleportCallQueuedTeleport(false);
-        }
+        if (usrParams.record_flags & TCRF_RECORD_GRAPHVIZ_FLOW_CONTROL)
+            result.graphviz_flow_control.CallQueuedPostAddNull();
 
         for (bool dequeued_null = false; !dequeued_null && !result.max_tps_exceeded;) {
-            int val = st.tp_queue.front();
-            st.tp_queue.pop_front();
+            int val = PopFromQueue();
             switch (val) {
                 case INTERN::FUNC_RECHECK_COLLISION:
                     break;
@@ -152,8 +167,9 @@ struct GenerateTeleportChainImpl {
                     break;
             }
         }
-        if (result.graphviz)
-            result.graphviz->PopNode();
+
+        if (usrParams.record_flags & TCRF_RECORD_GRAPHVIZ_FLOW_CONTROL)
+            result.graphviz_flow_control.FuncLeave();
     }
 
     template <INTERN::portal_type PORTAL>
@@ -164,7 +180,7 @@ struct GenerateTeleportChainImpl {
         st.owning_portal = INTERN::PORTAL_NONE;
         if (st.touch_scope_depth > 0)
             for (int i = 0; i < result.ent.n_children + !moving_to_linked; i++)
-                st.tp_queue.push_back(INTERN::FUNC_RECHECK_COLLISION);
+                PushToQueue(INTERN::FUNC_RECHECK_COLLISION);
     }
 
     template <INTERN::portal_type PORTAL>
@@ -211,16 +227,14 @@ struct GenerateTeleportChainImpl {
     void TeleportEntity()
     {
         if (st.touch_scope_depth > 0) {
-            st.tp_queue.push_back(PORTAL);
-            if (result.graphviz)
-                result.graphviz->SetLastTeleportCallQueuedTeleport(true);
+            PushToQueue(PORTAL);
             return;
         }
 
         if (result.total_n_teleports >= usrParams.n_max_teleports) {
             result.max_tps_exceeded = true;
-            if (result.graphviz)
-                result.graphviz->PushExceededTpNode(PORTAL == INTERN::FUNC_TP_BLUE);
+            if (usrParams.record_flags & TCRF_RECORD_GRAPHVIZ_FLOW_CONTROL)
+                result.graphviz_flow_control.TpExceeded(PORTAL == INTERN::FUNC_TP_BLUE);
             return;
         }
 
@@ -233,7 +247,8 @@ struct GenerateTeleportChainImpl {
         if (usrParams.record_flags & TCRF_RECORD_TP_DIRS)
             result.tp_dirs.push_back(PortalIsPrimary<PORTAL>());
 
-        int dgPlaneSide = 0;
+        using PS = mon::GraphvizFlowControlResult::PlaneSide;
+        PS gv_plane_side = PS::Unknown;
 
         if (usrParams.record_flags & TCRF_RECORD_PLANE_DIFFS) {
             PointToPortalPlaneUlpDist plane_dist{.is_valid = false};
@@ -243,29 +258,24 @@ struct GenerateTeleportChainImpl {
                                             : usrParams.pp->orange;
                 plane_dist = ProjectEntityToPortalPlane(result.ent, p_plane_diff_from).second;
                 if (plane_dist.is_valid)
-                    dgPlaneSide = plane_dist.pt_was_behind_portal ? -1 : 1;
+                    gv_plane_side = plane_dist.pt_was_behind_portal ? PS::Behind : PS::InFront;
             }
             result.portal_plane_diffs.push_back(plane_dist);
         }
 
-        if (result.graphviz)
-            result.graphviz->PushTeleportNode(PORTAL == INTERN::FUNC_TP_BLUE, result.cum_teleports, dgPlaneSide);
+        if (usrParams.record_flags & TCRF_RECORD_GRAPHVIZ_FLOW_CONTROL)
+            result.graphviz_flow_control.PostTeleportTransform(PORTAL == INTERN::FUNC_TP_BLUE, gv_plane_side);
 
         ReleaseOwnershipOfEntity<PORTAL>(true);
         st.owning_portal = OppositePortalType<PORTAL>();
 
-        // do the 4 touch calls
-        for (int i = 0; i < 4; i++) {
-            if (result.graphviz)
-                result.graphviz->SetTouchCallIndex(i);
-            if (i == 0 || i == 3)
-                EntityTouchPortal();
-            else
-                PortalTouchEntity<OppositePortalType<PORTAL>()>();
-        }
+        EntityTouchPortal();
+        PortalTouchEntity<OppositePortalType<PORTAL>()>();
+        PortalTouchEntity<OppositePortalType<PORTAL>()>();
+        EntityTouchPortal();
 
-        if (result.graphviz)
-            result.graphviz->PopNode();
+        if (usrParams.record_flags & TCRF_RECORD_GRAPHVIZ_FLOW_CONTROL)
+            result.graphviz_flow_control.FuncLeave();
     }
 };
 
@@ -275,9 +285,6 @@ void GenerateTeleportChain(const TeleportChainParams& params, TeleportChainResul
 
     GenerateTeleportChainImpl impl{params, result};
     impl.ResetState();
-
-    if (result.graphviz)
-        result.graphviz->ResetAndPushRootNode(params.first_tp_from_blue);
 
     if ((params.record_flags & TCRF_RECORD_PLANE_DIFFS) || params.project_to_first_portal_plane) {
         auto [nudged_ent, plane_diff] =
@@ -295,9 +302,6 @@ void GenerateTeleportChain(const TeleportChainParams& params, TeleportChainResul
         impl.PortalTouchEntity<TeleportChainInternalState::FUNC_TP_BLUE>();
     else
         impl.PortalTouchEntity<TeleportChainInternalState::FUNC_TP_ORANGE>();
-
-    if (result.graphviz)
-        result.graphviz->Finish();
 }
 
 std::string TeleportChainResult::CreateDebugString(const TeleportChainParams& params) const

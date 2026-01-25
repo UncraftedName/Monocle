@@ -1,7 +1,8 @@
 #pragma once
 
 #include "source_math.hpp"
-#include "tp_ring_queue.hpp"
+#include "chain_generation/chain_state.hpp"
+#include "chain_generation/gv_flow_control.hpp"
 
 #include <stdint.h>
 #include <vector>
@@ -29,6 +30,7 @@ struct PointToPortalPlaneUlpDist {
     uint32_t is_valid : 1;
 };
 
+// nudges an entity as close to behind-the-portal-plane as possible
 std::pair<Entity, PointToPortalPlaneUlpDist> ProjectEntityToPortalPlane(const Entity& ent, const Portal& portal);
 
 // opt-in flags for stuff that's recorded for every teleport
@@ -37,6 +39,7 @@ enum TeleportChainRecordFlags : uint32_t {
     TCRF_RECORD_ENTITY = 1 << 0,
     TCRF_RECORD_PLANE_DIFFS = 1 << 1,
     TCRF_RECORD_TP_DIRS = 1 << 2,
+    TCRF_RECORD_GRAPHVIZ_FLOW_CONTROL = 1 << 3,
 
     TCRF_RECORD_ALL = ~0u,
 };
@@ -69,32 +72,6 @@ struct TeleportChainParams {
     // this inits everything with sensible defaults, but every field above is public and can be changed
     TeleportChainParams(const PortalPair* pp, Entity ent);
     TeleportChainParams() : TeleportChainParams(nullptr, Entity{}) {}
-};
-
-struct TeleportChainInternalState {
-
-    using queue_entry = int;
-    using queue_type = RingQueue<queue_entry, 8>;
-
-    using portal_type = queue_entry;
-    static constexpr queue_entry FUNC_RECHECK_COLLISION = 0;
-    static constexpr portal_type FUNC_TP_BLUE = 1;
-    static constexpr portal_type FUNC_TP_ORANGE = 2;
-    static constexpr portal_type PORTAL_NONE = 0;
-
-    /*
-    * CPortalTouchScope::m_CallQueue. Holds values representing:
-    * - FUNC_TP_BLUE: a blue teleport
-    * - FUNC_TP_ORANGE: an orange teleport
-    * - FUNC_RECHECK_COLLISION: RecheckEntityCollision
-    * - negative values: a null
-    */
-    queue_type tp_queue;
-    // total number of nulls queued so far, only for debugging
-    queue_entry n_queued_nulls;
-    int touch_scope_depth; // CPortalTouchScope::m_nDepth, not fully implemented
-
-    portal_type owning_portal;
 };
 
 // this struct can (and should) be reused when generating multiple chains
@@ -132,8 +109,12 @@ struct TeleportChainResult {
     * for primary (first) portal, false otherwise. Has total_n_teleports elements.
     */
     std::vector<bool> tp_dirs;
-    // an optional pointer (user-supplied), which will record the chain as a graphviz DOT graph
-    GraphvizGen* graphviz = nullptr;
+    /*
+    * If params.flags has TCRF_RECORD_GRAPHVIZ_FLOW_CONTROL, contains detailed information about
+    * the flow control of the teleport & touch functions. This can be dumped to a graphviz (.gv)
+    * file. If TCRF_RECORD_PLANE_DIFFS is also set, this will have slightly more infomration.
+    */
+    GraphvizFlowControlResult graphviz_flow_control;
 
     // internal
     TeleportChainInternalState _st;
@@ -153,60 +134,5 @@ struct TeleportChainResult {
 * angle glitches.
 */
 void GenerateTeleportChain(const TeleportChainParams& params, TeleportChainResult& result);
-
-/*
-* Generates a GraphViz graph representing a teleport chain. Originally this was done via the
-* Graphviz C API, but that led to DLL linking hell. So instead this just formats the file manually.
-*/
-class GraphvizGen {
-    std::vector<int> node_stack;
-    int node_counter;
-    int touch_call_index; // which of the 4 touch calls are we in right now?
-    bool last_teleport_call_queued_a_teleport;
-
-public:
-    // after Finish(), contains the DOT graph text
-    std::string buf;
-
-    struct {
-        const char* indent = "    ";
-        const char* blueCol = "cornflowerblue";
-        const char* orangeCol = "orange";
-        const char* defaultEdgeAttributes = "style = dotted";
-        const char* teleportEdgeAttributes = "color = red";
-    } style;
-
-private:
-    // clears the state and starts a new graph with the given color for the initial teleport portal
-    void ResetAndPushRootNode(bool blue);
-    void PushCallQueuedNode(const TeleportChainInternalState::queue_type& queue);
-    // planeSide=-1 -> ShouldTeleport()=true, planeSide=1 -> ShouldTeleport()=false, otherwise ignored
-    void PushTeleportNode(bool blue, int cum_teleports, int planeSide);
-    void PushExceededTpNode(bool blue);
-
-    void SetTouchCallIndex(int i)
-    {
-        touch_call_index = i;
-    }
-
-    void SetLastTeleportCallQueuedTeleport(bool x)
-    {
-        last_teleport_call_queued_a_teleport = x;
-    }
-
-    // for every push, there is a pop
-    void PopNode()
-    {
-        node_stack.pop_back();
-    }
-
-    void Finish()
-    {
-        buf += "}\n";
-    };
-
-    friend void GenerateTeleportChain(const TeleportChainParams& params, TeleportChainResult& result);
-    friend struct GenerateTeleportChainImpl;
-};
 
 } // namespace mon
