@@ -253,7 +253,6 @@ Entity Entity::CreatePlayerFromOrigin(Vector origin, bool crouched)
     ent.is_player = true;
     ent.player.origin = origin;
     ent.player.crouched = crouched;
-    ent.n_children = N_CHILDREN_PLAYER_WITH_PORTAL_GUN;
     return ent;
 }
 
@@ -268,7 +267,6 @@ Entity Entity::CreateBall(Vector center, float radius)
     ent.is_player = false;
     ent.ball.center = center;
     ent.ball.radius = radius;
-    ent.n_children = 0;
     return ent;
 }
 
@@ -295,7 +293,7 @@ Vector Entity::GetCenter() const
 
 bool Entity::operator==(const Entity& other) const
 {
-    return is_player == other.is_player && n_children == other.n_children &&
+    return is_player == other.is_player &&
            (is_player
                 ? (std::tie(player.crouched, player.origin) == std::tie(other.player.crouched, other.player.origin))
                 : (std::tie(ball.center, ball.radius) == std::tie(other.ball.center, other.ball.radius)));

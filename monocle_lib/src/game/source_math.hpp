@@ -237,9 +237,6 @@ static constexpr Vector PLAYER_STAND_MINS{-16.f, -16.f, 0.f};
 static constexpr Vector PLAYER_STAND_MAXS{16.f, 16.f, 72.f};
 static constexpr Vector PLAYER_STAND_HALF = (PLAYER_STAND_MINS + PLAYER_STAND_MAXS) * .5f;
 
-#define N_CHILDREN_PLAYER_WITHOUT_PORTAL_GUN 1
-#define N_CHILDREN_PLAYER_WITH_PORTAL_GUN 2
-
 struct Entity {
 
     union {
@@ -258,18 +255,9 @@ struct Entity {
 
     bool is_player;
 
-    /*
-    * The number of children the entity has. Usually this is N_CHILDREN_PLAYER_WITH_PORTAL_GUN for
-    * the player and 0 otherwise.
-    * 
-    * This *is* used in the chain generation code, and it's possible that it may be relevant in
-    * some niche cases, although I haven't found any (yet).
-    */
-    unsigned short n_children;
-
 public:
 #ifdef DEBUG_NAN_CTORS
-    Entity() : is_player(true), player(Vector{}, true), n_children(N_CHILDREN_PLAYER_WITH_PORTAL_GUN) {}
+    Entity() : is_player(true), player(Vector{}, true) {}
 #else
     Entity() {}
 #endif

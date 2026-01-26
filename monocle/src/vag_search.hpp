@@ -156,7 +156,6 @@ struct SearchSpace {
             params.ent = tp_player ? Entity::CreatePlayerFromCenter(ent_pos, true) : Entity::CreateBall(ent_pos, 1.f);
             params.n_max_teleports = 3;
             params.first_tp_from_blue = tp_from_blue;
-            params.map_origin_inbounds = false;
 
             GenerateTeleportChain(params, chain_result);
 

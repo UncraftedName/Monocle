@@ -103,8 +103,6 @@ std::ostream& operator<<(std::ostream& os, GraphvizFlowControlResult const& res)
                 return 'B';
             case TeleportChainInternalState::FUNC_TP_ORANGE:
                 return 'O';
-            case TeleportChainInternalState::FUNC_RECHECK_COLLISION:
-                return 'R';
             default:
                 return 'N';
         }

@@ -27,6 +27,17 @@ TeleportChainParams::TeleportChainParams(const PortalPair* pp, Entity ent)
 * Most of the functions are templated here for debugging - the call stack will have e.g.
 * GenerateTeleportChainImpl::TeleportEntity<1>           // blue portal
 * GenerateTeleportChainImpl::ReleaseOwnershipOfEntity<2> // orange portal
+* 
+* Note: CPortalSimulator::ReleaseOwnershipOfEntity may call RecheckEntityCollision which may be
+* added to the queue as well. As far as I can tell this is a noop and can be ignored for the
+* purpose of chain generation. If RecheckEntityCollision is added to the queue, it will just be
+* popped off an executed until the next teleport or null. That also means that any code that:
+* 
+* - keeps track of which portal owns the entity (CPortalSimulator::OwnsEntity)
+* - checks how many children the entity has (CPortalSimulator::ReleaseOwnershipOfEntity)
+* - relies on the map origin being inbounds (CProp_Portal::Touch after SharedEnvironmentCheck)
+* 
+* is irrelevant.
 */
 struct GenerateTeleportChainImpl {
 
@@ -47,7 +58,6 @@ struct GenerateTeleportChainImpl {
         st.tp_queue.clear();
         st.n_queued_nulls = 0;
         st.touch_scope_depth = 0;
-        st.owning_portal = usrParams.first_tp_from_blue ? INTERN::FUNC_TP_BLUE : INTERN::FUNC_TP_ORANGE;
 
         // clear result
 
@@ -112,8 +122,6 @@ struct GenerateTeleportChainImpl {
         for (bool dequeued_null = false; !dequeued_null && !result.max_tps_exceeded;) {
             int val = PopFromQueue();
             switch (val) {
-                case INTERN::FUNC_RECHECK_COLLISION:
-                    break;
                 case INTERN::FUNC_TP_BLUE:
                     TeleportEntity<INTERN::FUNC_TP_BLUE>();
                     break;
@@ -132,44 +140,11 @@ struct GenerateTeleportChainImpl {
     }
 
     template <INTERN::portal_type PORTAL>
-    void ReleaseOwnershipOfEntity(bool moving_to_linked)
-    {
-        if (PORTAL != st.owning_portal)
-            return;
-        st.owning_portal = INTERN::PORTAL_NONE;
-        if (st.touch_scope_depth > 0)
-            for (int i = 0; i < result.ent.n_children + !moving_to_linked; i++)
-                PushToQueue(INTERN::FUNC_RECHECK_COLLISION);
-    }
-
-    template <INTERN::portal_type PORTAL>
-    bool SharedEnvironmentCheck()
-    {
-        if (st.owning_portal == INTERN::PORTAL_NONE || st.owning_portal == PORTAL)
-            return true;
-        Vector ent_center = result.ent.GetCenter();
-        return ent_center.DistToSqr(GetPortal<PORTAL>().pos) <
-               ent_center.DistToSqr(GetPortal<OppositePortalType<PORTAL>()>().pos);
-    }
-
-    template <INTERN::portal_type PORTAL>
     void PortalTouchEntity()
     {
         if (result.max_tps_exceeded)
             return;
         ++st.touch_scope_depth;
-        if (st.owning_portal != PORTAL) {
-            if (SharedEnvironmentCheck<PORTAL>()) {
-                bool ent_in_front =
-                    GetPortal<PORTAL>().plane.n.Dot(result.ent.GetCenter()) > GetPortal<PORTAL>().plane.d;
-                bool player_stuck = result.ent.is_player ? !usrParams.map_origin_inbounds : false;
-                if (ent_in_front || player_stuck) {
-                    if (st.owning_portal != PORTAL && st.owning_portal != INTERN::PORTAL_NONE)
-                        ReleaseOwnershipOfEntity<OppositePortalType<PORTAL>()>(false);
-                    st.owning_portal = PORTAL;
-                }
-            }
-        }
         if (GetPortal<PORTAL>().ShouldTeleport(result.ent, true))
             TeleportEntity<PORTAL>();
         if (--st.touch_scope_depth == 0)
@@ -224,9 +199,6 @@ struct GenerateTeleportChainImpl {
 
         if (usrParams.record_flags & TCRF_RECORD_GRAPHVIZ_FLOW_CONTROL)
             result.graphviz_flow_control.PostTeleportTransform(PORTAL == INTERN::FUNC_TP_BLUE, gv_plane_side);
-
-        ReleaseOwnershipOfEntity<PORTAL>(true);
-        st.owning_portal = OppositePortalType<PORTAL>();
 
         EntityTouchPortal();
         PortalTouchEntity<OppositePortalType<PORTAL>()>();

@@ -135,7 +135,6 @@ static void GenerateResultsDistributionsToFile()
 
             params.pp = &pp;
             params.ent = mon::Entity::CreatePlayerFromCenter(ent_pos, true);
-            params.map_origin_inbounds = false;
             params.first_tp_from_blue = true;
             params.n_max_teleports = 3;
             params.record_flags = mon::TCRF_NONE;
@@ -206,7 +205,6 @@ static void CreateOverlayPortalImage(const mon::PortalPair& pair,
                 mon::Vector r_off = p.r * mx;
                 params.pp = &pair;
                 params.ent = mon::Entity::CreatePlayerFromCenter(p.pos + r_off + u_off, true);
-                params.map_origin_inbounds = false;
                 params.n_max_teleports = 10;
                 params.first_tp_from_blue = from_blue;
                 params.record_flags = mon::TCRF_NONE;
@@ -266,7 +264,6 @@ static void FindVagIn04()
 
         params.pp = &pp;
         params.ent = mon::Entity::CreatePlayerFromCenter(pp.blue.pos + pp.blue.r * r + pp.blue.u * u, true);
-        params.map_origin_inbounds = true;
         params.first_tp_from_blue = true;
         params.n_max_teleports = 3;
 
@@ -347,7 +344,6 @@ static void FindComplexChain()
 
         params.pp = &pp;
         params.ent = mon::Entity::CreatePlayerFromCenter(pp.blue.pos, true);
-        params.map_origin_inbounds = true;
         params.n_max_teleports = 10;
         params.first_tp_from_blue = true;
 
@@ -484,7 +480,6 @@ static void FindFiniteChainThatGivesNFE()
         params.pp = &pp;
         params.ent = mon::Entity::CreatePlayerFromCenter(pp.blue.pos, true);
         params.n_max_teleports = 34;
-        params.map_origin_inbounds = false;
         params.first_tp_from_blue = true;
 
         GenerateTeleportChain(params, result);

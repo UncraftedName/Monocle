@@ -56,13 +56,6 @@ struct TeleportChainParams {
     * be teleported at all.
     */
     bool project_to_first_portal_plane = true;
-    /*
-    * In the map where these portals exist, is the map origin inbounds?
-    * 
-    * This *is* used in the chain generation code, and it's possible that it may be relevant in
-    * some niche cases, although I haven't found any (yet).
-    */
-    bool map_origin_inbounds = false;
     // which portal is the first teleport from?
     bool first_tp_from_blue;
     // TeleportChainRecordFlags
