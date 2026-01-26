@@ -1,5 +1,3 @@
-#pragma once
-
 #include "source_math.hpp"
 #include "source_math_double.hpp"
 #include "vag_logic.hpp"
@@ -7,48 +5,34 @@
 
 #include <format>
 
-namespace mon::ulp {
+namespace mon {
 
-// compares a struct of floats and a struct of doubles by extracting the fractional ulp diff element-wise
-template <typename FT, typename DT>
-inline DT UlpStructDiffD(const FT& f, const DT& d)
+std::ostream& TeleportChainResult::CompareWithHighPrecisionChainToCsv(std::ostream& os,
+                                                                      const TeleportChainParams& params) const
 {
-    static_assert(sizeof(FT) / sizeof(float) == sizeof(DT) / sizeof(double));
-    DT d_out;
-    for (size_t i = 0; i < sizeof(FT) / sizeof(float); i++)
-        ((double*)&d_out)[i] = UlpDiffD(((float*)&f)[i], ((double*)&d)[i]);
-    return d_out;
-}
+    auto required_flags = TCRF_RECORD_TP_DIRS | TCRF_RECORD_ENTITY;
+    if ((params.record_flags & required_flags) != required_flags)
+        return os << __FUNCTION__ << ": TCRF_RECORD_TP_DIRS | TCRF_RECORD_ENTITY is required";
 
-/*
-* For each teleport in the given chain, creates a double precision entity and applies the same
-* teleport. The float entity, double entity, and difference between them is written to a string
-* which can be exported as a CSV file.
-*/
-inline std::string TeleportChainCompareToCsv(const TeleportChainParams& params, const TeleportChainResult& result)
-{
     MON_ASSERT(!!params.pp);
-    MON_ASSERT(params.record_flags & (TCRF_RECORD_ENTITY | TCRF_RECORD_TP_DIRS));
-    MON_ASSERT(result.ents.size() == result.tp_dirs.size() + 1);
+    MON_ASSERT(ents.size() == tp_dirs.size() + 1);
 
     const PortalPair& pp = *params.pp;
     PortalPairD ppd{pp};
 
-    std::string res = "name,float_val,double_val,ulp_diff,abs_diff,rel_diff,is_blue\n";
-    auto it = std::back_inserter(res);
+    os << "name,float_val,double_val,ulp_diff,abs_diff,rel_diff,is_blue\n";
 
-    auto write_row = [&it](const std::string& entry_name, float float_val, double double_val, bool blue) -> void {
-        it = std::format_to(it,
-                            "{}," MON_F_FMT "," MON_D_FMT "," MON_D_FMT "," MON_D_FMT "," MON_D_FMT
-                            ",{}"
-                            "\n",
-                            entry_name,
-                            float_val,
-                            double_val,
-                            UlpDiffD(double_val, float_val),
-                            double_val - float_val,
-                            (double_val == 0. && float_val == 0.f) ? 0. : (float_val - double_val) / double_val,
-                            blue ? "true" : "false");
+    auto write_row = [&](const std::string& entry_name, float float_val, double double_val, bool blue) -> void {
+        os << std::format("{}," MON_F_FMT "," MON_D_FMT "," MON_D_FMT "," MON_D_FMT "," MON_D_FMT
+                          ",{}"
+                          "\n",
+                          entry_name,
+                          float_val,
+                          double_val,
+                          ulp::UlpDiffD(double_val, float_val),
+                          double_val - float_val,
+                          (double_val == 0. && float_val == 0.f) ? 0. : (float_val - double_val) / double_val,
+                          blue ? "true" : "false");
     };
 
     auto write_vec = [&](const std::string& prefix, const Vector& v, const VectorD& vd, bool blue) {
@@ -87,22 +71,22 @@ inline std::string TeleportChainCompareToCsv(const TeleportChainParams& params, 
 
     // write chain vals
 
-    for (size_t i = 0; i < result.tp_dirs.size(); i++) {
-        bool is_blue = params.first_tp_from_blue == result.tp_dirs[i];
-        EntityD ent_d_pre{result.ents[i]};
+    for (size_t i = 0; i < tp_dirs.size(); i++) {
+        bool is_blue = params.first_tp_from_blue == tp_dirs[i];
+        EntityD ent_d_pre{ents[i]};
         write_vec(std::string("ent_pre_teleport_") + std::to_string(i),
-                  result.ents[i].GetCenter(),
+                  ents[i].GetCenter(),
                   ent_d_pre.GetCenter(),
                   is_blue);
 
         EntityD ent_d_post = ppd.Teleport(ent_d_pre, is_blue);
         write_vec(std::string("ent_post_teleport_") + std::to_string(i),
-                  result.ents[i + 1].GetCenter(),
+                  ents[i + 1].GetCenter(),
                   ent_d_post.GetCenter(),
                   is_blue);
     }
 
-    return res;
+    return os;
 }
 
-} // namespace mon::ulp
+} // namespace mon

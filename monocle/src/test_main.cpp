@@ -1,10 +1,10 @@
 #include "catch_amalgamated.hpp"
 #include "source_math.hpp"
-#include "source_math_double.hpp"
-#include "source_math_double_compare.hpp"
 #include "vag_logic.hpp"
 #include "prng.hpp"
 #include "tp_ring_queue.hpp"
+#include "source_math_double.hpp"
+#include "ulp_diff.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX

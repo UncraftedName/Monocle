@@ -306,7 +306,8 @@ void GenerateTeleportChain(const TeleportChainParams& params, TeleportChainResul
 
 std::ostream& TeleportChainResult::WriteDebugView(std::ostream& os, const TeleportChainParams& params) const
 {
-    if (!(params.record_flags & (TCRF_RECORD_TP_DIRS | TCRF_RECORD_ENTITY)))
+    auto required_flags = TCRF_RECORD_TP_DIRS | TCRF_RECORD_ENTITY;
+    if ((params.record_flags & required_flags) != required_flags)
         return os << __FUNCTION__ << ": TCRF_RECORD_TP_DIRS | TCRF_RECORD_ENTITY is required";
 
     int min_cum = 0, max_cum = 0, cum = 0;

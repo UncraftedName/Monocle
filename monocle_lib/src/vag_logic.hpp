@@ -121,12 +121,24 @@ struct TeleportChainResult {
     TeleportChainInternalState _st;
 
     /*
-    * Write a debug string to e.g. stdout to see at a glance what the chain looks like. This
-    * chain result should have already be populated by GenerateTeleportChain(), and params should
-    * be the same as those passed to that function. This requires params.recordFlags to have both
-    * flags (TCRF_RECORD_TP_DIRS | TCRF_RECORD_ENTITY).
+    * Write a debug string to e.g. stdout to see at a glance what the chain looks like.
+    * 
+    * This chain result should have already be populated by GenerateTeleportChain(), and params
+    * should be the same as those passed to that function. This requires params.recordFlags to
+    * have (TCRF_RECORD_ENTITY | TCRF_RECORD_TP_DIRS).
     */
     std::ostream& WriteDebugView(std::ostream& os, const TeleportChainParams& params) const;
+
+    /*
+    * For each teleport in this chain, creates a double precision entity and applies the same
+    * teleport. The float entity, double entity, and difference between them is written to a stream
+    * which can be exported as a CSV file.
+    * 
+    * This chain result should have already be populated by GenerateTeleportChain(), and params
+    * should be the same as those passed to that function. This requires params.recordFlags to
+    * have (TCRF_RECORD_ENTITY | TCRF_RECORD_TP_DIRS).
+    */
+    std::ostream& CompareWithHighPrecisionChainToCsv(std::ostream&, const TeleportChainParams& params) const;
 };
 
 /*

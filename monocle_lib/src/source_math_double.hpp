@@ -321,8 +321,8 @@ struct PortalPairD {
             const PortalD& p = tp_from_blue ? blue : orange;
             const PortalD& op = tp_from_blue ? orange : blue;
 
-            if (!playerCrouched && std::fabsf(p.f.z) > 0.f &&
-                (std::fabsf(std::fabs(p.f.z) - 1.f) >= .01f || std::fabsf(std::fabs(op.f.z) - 1.f) >= .01f)) {
+            if (!playerCrouched && std::abs(p.f.z) > 0.f &&
+                (std::abs(std::abs(p.f.z) - 1.f) >= .01f || std::abs(std::abs(op.f.z) - 1.f) >= .01f)) {
                 if (p.f.z > 0.f)
                     oldCenter.z -= 16.f;
                 else
