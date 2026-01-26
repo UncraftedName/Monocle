@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- https://learn.microsoft.com/en-us/visualstudio/debugger/create-custom-views-of-native-objects?view=visualstudio -->
+
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+    <Type Name="mon::RingQueue&lt;*&gt;">
+        <DisplayString>{{ size={n_elems} }}</DisplayString>
+        <Expand>
+            <Item Name="[capacity]">index_mask + 1</Item>
+            <!-- VC 2015 -->
+            <IndexListItems>
+                <Size>n_elems</Size>
+                <ValueNode>*(mem._Mypair._Myval2 + (($i + first) % (index_mask + 1)))</ValueNode>
+            </IndexListItems>
+        </Expand>
+    </Type>
+</AutoVisualizer>
