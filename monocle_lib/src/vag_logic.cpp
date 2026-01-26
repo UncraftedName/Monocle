@@ -304,12 +304,10 @@ void GenerateTeleportChain(const TeleportChainParams& params, TeleportChainResul
         impl.PortalTouchEntity<TeleportChainInternalState::FUNC_TP_ORANGE>();
 }
 
-std::string TeleportChainResult::CreateDebugString(const TeleportChainParams& params) const
+std::ostream& TeleportChainResult::WriteDebugView(std::ostream& os, const TeleportChainParams& params) const
 {
     if (!(params.record_flags & (TCRF_RECORD_TP_DIRS | TCRF_RECORD_ENTITY)))
-        return std::string(__FUNCTION__) + ": TCRF_RECORD_TP_DIRS | TCRF_RECORD_ENTITY is required";
-
-    std::string out;
+        return os << __FUNCTION__ << ": TCRF_RECORD_TP_DIRS | TCRF_RECORD_ENTITY is required";
 
     int min_cum = 0, max_cum = 0, cum = 0;
     for (bool dir : tp_dirs) {
@@ -320,7 +318,7 @@ std::string TeleportChainResult::CreateDebugString(const TeleportChainParams& pa
     int left_pad = ents.size() <= 1 ? 1 : (int)std::floor(std::log10(ents.size() - 1)) + 1;
     cum = 0;
     for (size_t i = 0; i <= tp_dirs.size(); i++) {
-        std::format_to(std::back_inserter(out), "{:{}d}) ", i, left_pad);
+        os << std::format("{:{}d}) ", i, left_pad);
         for (int c = min_cum; c <= max_cum; c++) {
 
             bool should_teleport = false;
@@ -331,28 +329,28 @@ std::string TeleportChainResult::CreateDebugString(const TeleportChainParams& pa
 
             if (c == cum) {
                 if (c == 0)
-                    out += should_teleport ? "0|>" : ".|0";
+                    os << (should_teleport ? "0|>" : ".|0");
                 else if (c == 1)
-                    out += should_teleport ? "<|1" : "1|.";
+                    os << (should_teleport ? "<|1" : "1|.");
                 else if (c < 0)
-                    std::format_to(std::back_inserter(out), "{}.", c);
+                    os << c << '.';
                 else
-                    std::format_to(std::back_inserter(out), ".{}.", c);
+                    os << '.' << c << '.';
             } else {
                 if (c == 0)
-                    out += ".|>";
+                    os << ".|>";
                 else if (c == 1)
-                    out += "<|.";
+                    os << "<|.";
                 else
-                    out += "...";
+                    os << "...";
             }
         }
-        out += '\n';
+        os << '\n';
         if (i < tp_dirs.size())
             cum += tp_dirs[i] ? 1 : -1;
     }
 
-    return out;
+    return os;
 }
 
 } // namespace mon

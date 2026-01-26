@@ -642,6 +642,7 @@ static void FindKnownVagIn11()
         ss.params.pp = &sr->pp;
         std::string dump = mon::ulp::TeleportChainCompareToCsv(ss.params, sr->chain_result);
         std::ofstream{"chain_dump.csv"} << dump;
+        sr->chain_result.WriteDebugView(std::cout, ss.params);
     }
 }
 

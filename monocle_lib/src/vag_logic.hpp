@@ -9,6 +9,7 @@
 #include <string>
 #include <memory>
 #include <utility>
+#include <ostream>
 
 namespace mon {
 
@@ -120,12 +121,12 @@ struct TeleportChainResult {
     TeleportChainInternalState _st;
 
     /*
-    * Create a string that can be printed to stdout for debugging what the chain looks like. This
+    * Write a debug string to e.g. stdout to see at a glance what the chain looks like. This
     * chain result should have already be populated by GenerateTeleportChain(), and params should
     * be the same as those passed to that function. This requires params.recordFlags to have both
     * flags (TCRF_RECORD_TP_DIRS | TCRF_RECORD_ENTITY).
     */
-    std::string CreateDebugString(const TeleportChainParams& params) const;
+    std::ostream& WriteDebugView(std::ostream& os, const TeleportChainParams& params) const;
 };
 
 /*
