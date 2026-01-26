@@ -1,7 +1,6 @@
-#include "source_math.hpp"
-#include "source_math_double.hpp"
-#include "vag_logic.hpp"
-#include "ulp_diff.hpp"
+#include "teleport_chain/generate.hpp"
+#include "teleport_chain/ulp_diff.hpp"
+#include "game/source_math_double.hpp"
 
 #include <format>
 

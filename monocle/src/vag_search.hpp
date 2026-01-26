@@ -1,6 +1,6 @@
 #pragma once
 
-#include "source_math.hpp"
+#include "game/source_math.hpp"
 #include "prng.hpp"
 
 #include <vector>

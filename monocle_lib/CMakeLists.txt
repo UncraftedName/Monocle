@@ -1,15 +1,17 @@
 set(SRC_FILES
-	src/source_math.asm
-	src/source_math.cpp
-	src/source_math_strings.cpp
-	src/vag_logic.cpp
-	src/chain_generation/gv_flow_control.cpp
-	src/source_math_double_compare.cpp
+	"src/game/source_math.asm"
+	"src/game/source_math.cpp"
+	"src/game/source_math_strings.cpp"
+	"src/teleport_chain/ent_to_portal.cpp"
+	"src/teleport_chain/generate.cpp"
+	"src/teleport_chain/debug/csv_precision_compare.cpp"
+	"src/teleport_chain/debug/gv_flow_control.cpp"
+	"src/teleport_chain/debug/minidump.cpp"
 )
 
 # Redirect MASM output object file to fix: 'cannot open file : monocle_lib.dir\Debug\/src/source_math.asm.obj'
 # TODO I have no idea why this is necessary.
-set_source_files_properties(src/source_math.asm PROPERTIES
+set_source_files_properties(src/game/source_math.asm PROPERTIES
 	COMPILE_FLAGS "/Fo$(IntDir)source_math.obj"
 	LANGUAGE ASM_MASM
 )

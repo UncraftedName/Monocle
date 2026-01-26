@@ -1,13 +1,13 @@
 #pragma once
 
-#include "source_math.hpp"
-#include "chain_generation/chain_state.hpp"
-#include "chain_generation/gv_flow_control.hpp"
+#include "monocle_config.hpp"
+#include "game/source_math.hpp"
+#include "generate_state.hpp"
+#include "debug/gv_flow_control.hpp"
 
 #include <stdint.h>
 #include <vector>
 #include <string>
-#include <memory>
 #include <utility>
 #include <ostream>
 
@@ -127,7 +127,7 @@ struct TeleportChainResult {
     * should be the same as those passed to that function. This requires params.recordFlags to
     * have (TCRF_RECORD_ENTITY | TCRF_RECORD_TP_DIRS).
     */
-    std::ostream& WriteDebugView(std::ostream& os, const TeleportChainParams& params) const;
+    std::ostream& MiniDump(std::ostream& os, const TeleportChainParams& params) const;
 
     /*
     * For each teleport in this chain, creates a double precision entity and applies the same

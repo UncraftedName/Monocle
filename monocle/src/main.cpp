@@ -1,5 +1,5 @@
-#include "source_math.hpp"
-#include "vag_logic.hpp"
+#include "game/source_math.hpp"
+#include "teleport_chain/generate.hpp"
 #include "prng.hpp"
 #include "tga.hpp"
 #include "ctpl_stl.h"
@@ -641,7 +641,7 @@ static void FindKnownVagIn11()
         ss.params.pp = &sr->pp;
         std::ofstream os_high_precision{"chain_dump_high_precision_11.csv"};
         sr->chain_result.CompareWithHighPrecisionChainToCsv(os_high_precision, ss.params);
-        sr->chain_result.WriteDebugView(std::cout, ss.params);
+        sr->chain_result.MiniDump(std::cout, ss.params);
     }
 }
 

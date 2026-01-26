@@ -1,4 +1,4 @@
-#include "vag_logic.hpp"
+#include "generate.hpp"
 #include "ulp_diff.hpp"
 
 #include <cmath>
@@ -9,47 +9,6 @@
 #include <format>
 
 namespace mon {
-
-std::pair<Entity, PointToPortalPlaneUlpDist> ProjectEntityToPortalPlane(const Entity& ent, const Portal& portal)
-{
-    const VPlane& plane = portal.plane;
-
-    uint32_t ax = 0;
-    for (int i = 1; i < 3; i++)
-        if (std::fabsf(plane.n[i]) > std::fabsf(plane.n[ax]))
-            ax = i;
-
-    Vector old_center = ent.GetCenter();
-    Entity proj_ent = ent;
-    float& new_ax_val = proj_ent.GetPosRef()[ax]; // the component we're nudging
-    float old_ax_val = new_ax_val;
-    /*
-    * plane: ax+by+cz=d, center: <i,j,k>
-    * If e.g. we're projecting along the x-axis, then: x = (d-by-cz)/a = old_x + (d - plane*center) / a.
-    * We're trying to project the ent center onto the plane, but for e.g. the player we must adjust
-    * the origin, so use the difference of centers to adjust PosRef.
-    */
-    float new_center_ax_val = (float)(old_center[ax] + (plane.d - plane.n.Dot(old_center)) / plane.n[ax]);
-    new_ax_val += new_center_ax_val - old_center[ax];
-    /*
-    * Mathematically, the entity is on the plane now. But we want to make sure it's as close as
-    * possible. Move along the plane normal until we're in front, then move back.
-    */
-    for (int same_as_plane_norm = 1; same_as_plane_norm >= 0; same_as_plane_norm--) {
-        float nudge_towards = !!same_as_plane_norm == std::signbit(plane.n[ax]) ? -INFINITY : INFINITY;
-        while (portal.ShouldTeleport(proj_ent, false) == !!same_as_plane_norm)
-            new_ax_val = std::nextafterf(new_ax_val, nudge_towards);
-    }
-
-    uint32_t ulp_diff = ulp::UlpDiffF(new_ax_val, old_ax_val);
-    PointToPortalPlaneUlpDist dist_info{
-        .n_ulps = ulp_diff,
-        .ax = ax,
-        .pt_was_behind_portal = ulp_diff == 0 || std::signbit(new_ax_val - old_ax_val) == std::signbit(plane.n[ax]),
-        .is_valid = true,
-    };
-    return {proj_ent, dist_info};
-}
 
 TeleportChainParams::TeleportChainParams(const PortalPair* pp, Entity ent)
     : pp(pp),
@@ -302,56 +261,6 @@ void GenerateTeleportChain(const TeleportChainParams& params, TeleportChainResul
         impl.PortalTouchEntity<TeleportChainInternalState::FUNC_TP_BLUE>();
     else
         impl.PortalTouchEntity<TeleportChainInternalState::FUNC_TP_ORANGE>();
-}
-
-std::ostream& TeleportChainResult::WriteDebugView(std::ostream& os, const TeleportChainParams& params) const
-{
-    auto required_flags = TCRF_RECORD_TP_DIRS | TCRF_RECORD_ENTITY;
-    if ((params.record_flags & required_flags) != required_flags)
-        return os << __FUNCTION__ << ": TCRF_RECORD_TP_DIRS | TCRF_RECORD_ENTITY is required";
-
-    int min_cum = 0, max_cum = 0, cum = 0;
-    for (bool dir : tp_dirs) {
-        cum += dir ? 1 : -1;
-        min_cum = cum < min_cum ? cum : min_cum;
-        max_cum = cum > max_cum ? cum : max_cum;
-    }
-    int left_pad = ents.size() <= 1 ? 1 : (int)std::floor(std::log10(ents.size() - 1)) + 1;
-    cum = 0;
-    for (size_t i = 0; i <= tp_dirs.size(); i++) {
-        os << std::format("{:{}d}) ", i, left_pad);
-        for (int c = min_cum; c <= max_cum; c++) {
-
-            bool should_teleport = false;
-            if (c == 0 || c == 1) {
-                const Portal& p = params.first_tp_from_blue == !!c ? params.pp->orange : params.pp->blue;
-                should_teleport = p.ShouldTeleport(ents[i], false);
-            }
-
-            if (c == cum) {
-                if (c == 0)
-                    os << (should_teleport ? "0|>" : ".|0");
-                else if (c == 1)
-                    os << (should_teleport ? "<|1" : "1|.");
-                else if (c < 0)
-                    os << c << '.';
-                else
-                    os << '.' << c << '.';
-            } else {
-                if (c == 0)
-                    os << ".|>";
-                else if (c == 1)
-                    os << "<|.";
-                else
-                    os << "...";
-            }
-        }
-        os << '\n';
-        if (i < tp_dirs.size())
-            cum += tp_dirs[i] ? 1 : -1;
-    }
-
-    return os;
 }
 
 } // namespace mon
