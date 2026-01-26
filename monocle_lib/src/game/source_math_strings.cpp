@@ -135,4 +135,29 @@ std::string VMatrix::DebugToString() const
     return DebugFmtMatrix((float*)m, 4, 4);
 }
 
+std::optional<std::pair<Portal, std::from_chars_result>> Portal::FromString(std::string_view sv)
+{
+    std::array<float, 6> flts;
+
+    const char* first = sv.data();
+    const char* last = first + sv.size();
+    std::from_chars_result res{};
+
+    for (auto& flt : flts) {
+        for (;;) {
+            res = std::from_chars(first, last, flt);
+            if (res.ec == std::errc{}) {
+                first = res.ptr;
+                break;
+            } else if (first == last) {
+                return {};
+            } else {
+                ++first;
+            }
+        }
+    }
+
+    return std::pair(Portal{{flts[0], flts[1], flts[2]}, {flts[3], flts[4], flts[5]}}, res);
+}
+
 } // namespace mon

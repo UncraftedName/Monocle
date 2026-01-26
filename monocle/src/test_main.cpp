@@ -354,6 +354,27 @@ TEST_CASE("ShouldTeleport (with portal hole check")
     REQUIRE(should_teleport == p.ShouldTeleport(ent, true));
 }
 
+TEST_CASE("Portal from string (newlocation)")
+{
+    REPEAT_TEST(100);
+    small_prng rng{(uint32_t)_test_it};
+
+    mon::Portal p_ref = RandomPortal(rng);
+    std::string cmd = p_ref.NewLocationCmd("blue");
+
+    auto res = mon::Portal::FromString(cmd);
+    REQUIRE(res.has_value());
+    REQUIRE(res->second.ptr == &*--cmd.end());
+    REQUIRE(res->first.pos == p_ref.pos);
+    REQUIRE(res->first.ang == p_ref.ang);
+}
+
+TEST_CASE("Portal from string (fail)")
+{
+    auto res = mon::Portal::FromString("1 2 3 4 5");
+    REQUIRE_FALSE(res.has_value());
+}
+
 TEST_CASE("Teleport")
 {
     REPEAT_TEST(10000);

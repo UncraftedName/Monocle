@@ -6,6 +6,9 @@
 #include <array>
 #include <string>
 #include <math.h>
+#include <optional>
+#include <utility>
+#include <charconv>
 
 /*
 * This file replicates common source-engine types. Unless otherwise noted, the functions here
@@ -153,6 +156,11 @@ struct QAngle {
     {
         return ((Vector*)this)->ToString(delim);
     }
+
+    constexpr bool operator==(const QAngle& o) const
+    {
+        return x == o.x && y == o.y && z == o.z;
+    }
 };
 
 struct matrix3x4_t {
@@ -170,7 +178,7 @@ struct matrix3x4_t {
         return m_flMatVal[i];
     }
 
-    const float* operator[](int i) const 
+    const float* operator[](int i) const
     {
         MON_ASSERT(i >= 0 && i < 3);
         return m_flMatVal[i];
@@ -299,6 +307,9 @@ struct Portal {
     plane_bits hole_planes_bits[6]; // for fast box plane tests
 
     Portal(const Vector& v, const QAngle& q);
+
+    // (slow) parse first 6 numbers as pos.x, pos.y, pos.z, ang.x, ang.y, ang.z with any delimeters
+    static std::optional<std::pair<Portal, std::from_chars_result>> FromString(std::string_view sv);
 
     // follows the logic in ShouldTeleportTouchingEntity
     bool ShouldTeleport(const Entity& ent, bool check_portal_hole) const;
