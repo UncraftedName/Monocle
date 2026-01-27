@@ -1,5 +1,14 @@
 .686
-.model flat, C
+.MODEL FLAT
+
+; I'm not exactly an assembler pro, so I don't really understand the full reasons behind this, but
+; to link the mangled C++ names directly I have to:
+; - not specify a language (no 'OPTION LANGUAGE' and no '.model flat, C')
+; - not use aliases (that causes MSVC to jump to zero-filled mememory instead of my function)
+;
+; If I decide to switch this out to thunks like:
+; float Dot(const Vector& o) const { return MonAsmVectorDot(this, &o); }
+; then I either need to use C as the language in this file or add an underscore to the symbol.
 
 Vector STRUCT
     x DWORD ?
@@ -42,7 +51,7 @@ ThiscallToCdeclPostamble MACRO
 ENDM
 
 ; void AngleMatrix(const QAngle* angles, matrix3x4_t* matrix) : server.dll[0x451670]
-MonAsmAngleMatrix PROC PUBLIC
+_MonAsmAngleMatrix PROC PUBLIC
     SUB ESP, 20h
     LEA ECX, [ESP + 8]
     MOV [ESP + 14h], ECX
@@ -138,10 +147,10 @@ MonAsmAngleMatrix PROC PUBLIC
     FSTP dword ptr [EAX + 2Ch]
     ADD ESP, 20h
     RET
-MonAsmAngleMatrix ENDP
+_MonAsmAngleMatrix ENDP
 
 ; AngleVectors(const QAngle* angles, Vector* f, Vector* r, Vector* u) : server.dll[0x451130]
-MonAsmAngleVectors PROC PUBLIC
+_MonAsmAngleVectors PROC PUBLIC
     SUB ESP, 20h
     LEA ECX, [ESP + 4]
     MOV [ESP + 14h], ECX
@@ -261,10 +270,10 @@ no_u:
     FSTP ST(0)
     ADD ESP, 20h
     RET
-MonAsmAngleVectors ENDP
+_MonAsmAngleVectors ENDP
 
 ; MatrixInverseTR(const VMatrix* src, VMatrix* dst) : server.dll[0x4558e0]
-MonAsmMatrixInverseTR PROC PUBLIC
+_MonAsmMatrixInverseTR PROC PUBLIC
     SUB ESP, 18h
     MOV EAX, [ESP + 1Ch]
     FLD dword ptr [EAX]
@@ -301,7 +310,7 @@ MonAsmMatrixInverseTR PROC PUBLIC
     PUSH ECX
     FSTP dword ptr [ESP + 14h]
     PUSH ESI
-    CALL MonAsmVector3DMultiply
+    CALL _MonAsmVector3DMultiply
     FLD dword ptr [ESP + 1Ch]
     FSTP dword ptr [ESI + 0Ch]
     ADD ESP, 0Ch
@@ -318,10 +327,10 @@ MonAsmMatrixInverseTR PROC PUBLIC
     POP ESI
     ADD ESP, 18h
     RET
-MonAsmMatrixInverseTR ENDP
+_MonAsmMatrixInverseTR ENDP
 
 ; Vector3DMultiply(const VMatrix* src1, const Vector* src2, Vector* dst) : server.dll[0x455780]
-MonAsmVector3DMultiply PROC PUBLIC
+_MonAsmVector3DMultiply PROC PUBLIC
     MOV EAX, [ESP + 8]
     MOV ECX, [ESP + 0Ch]
     SUB ESP, 18h
@@ -375,12 +384,12 @@ src_not_dst:
     FSTP dword ptr [ECX + 8]
     ADD ESP, 18h
     RET
-MonAsmVector3DMultiply ENDP
+_MonAsmVector3DMultiply ENDP
 
 ; __cdecl VMatrix__MatrixMul(const VMatrix* lhs, const VMatrix* rhs, VMatrix* out)
 ; This is our implementation of VMatrix::MatrixMul : server.dll[0x454e30],
 ; called by VMatrix::operator* : server.dll[0x4550a0].
-MonAsmVMatrix__MatrixMul PROC PUBLIC
+_MonAsmVMatrix__MatrixMul PROC PUBLIC
     ThiscallToCdeclPreamble
 
     SUB ESP, 20h
@@ -602,12 +611,12 @@ MonAsmVMatrix__MatrixMul PROC PUBLIC
     ADD ESP, 20h
 
     ThiscallToCdeclPostamble
-MonAsmVMatrix__MatrixMul ENDP
+_MonAsmVMatrix__MatrixMul ENDP
 
 ; Vector VMatrix::operator*(Vector) : server.dll[0x3fe020]
 ; Same hack as above - function is actually __thiscall but we implement:
 ; Vector* __cdecl VMatrix__operatorVec(const VMatrix* lhs, Vector* out, const Vector* vVec)
-MonAsmVMatrix__operatorVec PROC PUBLIC
+_MonAsmVMatrix__operatorVec PROC PUBLIC
     ThiscallToCdeclPreamble
 
     MOV EDX, [ESP + 8]
@@ -644,6 +653,20 @@ MonAsmVMatrix__operatorVec PROC PUBLIC
     FSTP dword ptr [EAX + 8]
 
     ThiscallToCdeclPostamble
-MonAsmVMatrix__operatorVec ENDP
+_MonAsmVMatrix__operatorVec ENDP
+
+; float mon::Vector::Dot(const Vector& v) : server.dll[0x42b89e]
+?Dot@Vector@mon@@QBENABU12@@Z PROC
+    MOV  eax, [ESP + 4]
+    FLD  dword ptr [ecx + Vector.y]
+    FMUL dword ptr [eax + Vector.y]
+    FLD  dword ptr [ecx + Vector.z]
+    FMUL dword ptr [eax + Vector.z]
+    FADDP
+    FLD  dword ptr [ecx + Vector.x]
+    FMUL dword ptr [eax + Vector.x]
+    FADDP
+    RET 4
+?Dot@Vector@mon@@QBENABU12@@Z ENDP
 
 END

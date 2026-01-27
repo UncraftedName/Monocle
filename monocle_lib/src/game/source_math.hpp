@@ -103,18 +103,7 @@ struct Vector {
         return ((float*)this)[i];
     }
 
-    double constexpr Dot(const Vector& v) const
-    {
-        /*
-        * Since vs2005 uses x87 ops for everything, the result of the dot product is secretly a
-        * double. This behavior is annoying to replicate here since newer versions of vs don't
-        * like to use the x87 ops and the result is truncated when it's stored in the st0 reg.
-        * Hopefully we can replicate this by returning a double. So long as the result is compared
-        * with floats I think it should be fine, otherwise we might have to worry about the order
-        * of the addition: (x+y)+z != x+(y+z) in general, but equal if converting double->float.
-        */
-        return (double)x * v.x + (double)y * v.y + (double)z * v.z;
-    }
+    double Dot(const Vector& v) const;
 
     // probably not accurate to game code (double -> float truncation issue probably)
     float DistToSqr(const Vector& v) const
