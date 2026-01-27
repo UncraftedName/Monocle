@@ -103,16 +103,20 @@ struct Vector {
         return ((float*)this)[i];
     }
 
-    double Dot(const Vector& v) const;
+    // not accurate to game code
+    float Dot(const Vector& v) const
+    {
+        return x * v.x + y * v.y + z * v.z;
+    }
 
-    // probably not accurate to game code (double -> float truncation issue probably)
+    // not accurate to game code
     float DistToSqr(const Vector& v) const
     {
         Vector d = *this - v;
         return (float)d.Dot(d);
     }
 
-    // probably not accurate to game code
+    // not accurate to game code
     float DistTo(const Vector& v) const
     {
         return sqrtf(DistToSqr(v));

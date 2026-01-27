@@ -29,7 +29,7 @@ NEG1_F REAL4 -1.0
 .code
 
 ; void AngleMatrix(const QAngle* angles, matrix3x4_t* matrix) : server.dll[0x451670]
-_MonAsmAngleMatrix_5135 PROC PUBLIC
+_MonAsm_AngleMatrix_5135 PROC PUBLIC
     SUB ESP, 20h
     LEA ECX, [ESP + 8]
     MOV [ESP + 14h], ECX
@@ -125,10 +125,10 @@ _MonAsmAngleMatrix_5135 PROC PUBLIC
     FSTP dword ptr [EAX + 2Ch]
     ADD ESP, 20h
     RET
-_MonAsmAngleMatrix_5135 ENDP
+_MonAsm_AngleMatrix_5135 ENDP
 
 ; AngleVectors(const QAngle* angles, Vector* f, Vector* r, Vector* u) : server.dll[0x451130]
-_MonAsmAngleVectors_5135 PROC PUBLIC
+_MonAsm_AngleVectors_5135 PROC PUBLIC
     SUB ESP, 20h
     LEA ECX, [ESP + 4]
     MOV [ESP + 14h], ECX
@@ -248,10 +248,10 @@ no_u:
     FSTP ST(0)
     ADD ESP, 20h
     RET
-_MonAsmAngleVectors_5135 ENDP
+_MonAsm_AngleVectors_5135 ENDP
 
 ; MatrixInverseTR(const VMatrix* src, VMatrix* dst) : server.dll[0x4558e0]
-_MonAsmMatrixInverseTR_5135 PROC PUBLIC
+_MonAsm_MatrixInverseTR_5135 PROC PUBLIC
     SUB ESP, 18h
     MOV EAX, [ESP + 1Ch]
     FLD dword ptr [EAX]
@@ -305,7 +305,7 @@ _MonAsmMatrixInverseTR_5135 PROC PUBLIC
     POP ESI
     ADD ESP, 18h
     RET
-_MonAsmMatrixInverseTR_5135 ENDP
+_MonAsm_MatrixInverseTR_5135 ENDP
 
 ; Vector3DMultiply(const VMatrix* src1, const Vector* src2, Vector* dst) : server.dll[0x455780]
 MonAsmVector3DMultiply_5135 PROC PUBLIC
@@ -624,7 +624,7 @@ MonAsmVector3DMultiply_5135 ENDP
 ??DVMatrix@mon@@QBE?AUVector@1@ABU21@@Z ENDP
 
 ; float mon::Vector::Dot(const Vector& v) : server.dll[0x42b89e]
-?Dot@Vector@mon@@QBENABU12@@Z PROC
+?Dot@Vector@mon@@QBENABU12@@Z PROC PUBLIC
     MOV  eax, [ESP + 4]
     FLD  dword ptr [ecx + Vector.y]
     FMUL dword ptr [eax + Vector.y]
@@ -636,5 +636,50 @@ MonAsmVector3DMultiply_5135 ENDP
     FADDP
     RET 4
 ?Dot@Vector@mon@@QBENABU12@@Z ENDP
+
+; void __cdecl MonAsm_PosAndNormToPlane_5135(const mon::Vector& pos, const mon::Vector& dir, mon::VPlane& out) : server.dll[0x427bd5]
+_MonAsm_PosAndNormToPlane_5135 PROC PUBLIC
+    MOV ECX, [ESP + 12] ; ecx : plane
+    MOV EDX, [ESP + 8]  ; edx : normal
+    MOV EAX, [ESP + 4]  ; eax : pos
+    ; precise dot product
+    FLD  dword ptr [EAX + Vector.z]
+    FMUL dword ptr [EDX + Vector.z]
+    FLD  dword ptr [EAX + Vector.y]
+    FMUL dword ptr [EDX + Vector.y]
+    FADDP
+    FLD  dword ptr [EAX + Vector.x]
+    FMUL dword ptr [EDX + Vector.x]
+    FADDP
+    FSTP dword ptr [ECX + VPlane.d]
+    ; copy normal
+    FLD  dword ptr [EDX + Vector.x]
+    FSTP dword ptr [ECX + VPlane.n.x]
+    FLD  dword ptr [EDX + Vector.y]
+    FSTP dword ptr [ECX + VPlane.n.y]
+    FLD  dword ptr [EDX + Vector.z]
+    FSTP dword ptr [ECX + VPlane.n.z]
+    RET
+_MonAsm_PosAndNormToPlane_5135 ENDP
+
+; bool __cdecl MonAsm_PointBehindPlane_5135(const mon::VPlane& plane, const mon::Vector& pt) : server.dll[0x42b89e]
+_MonAsm_PointBehindPlane_5135 PROC PUBLIC
+    MOV ECX, [ESP + 4] ; ecx : plane
+    MOV EDX, [ESP + 8] ; edx : point
+    ; precise dot product
+    FLD   dword ptr [ECX + VPlane.n.z]
+    FMUL  dword ptr [EDX + Vector.z]
+    FLD   dword ptr [ECX + VPlane.n.y]
+    FMUL  dword ptr [EDX + Vector.y]
+    FADDP
+    FLD   dword ptr [ECX + VPlane.n.x]
+    FMUL  dword ptr [EDX + Vector.x]
+    FADDP
+    FCOMP dword ptr [ECX + VPlane.d]
+    FNSTSW ax
+    TEST   ah, 5
+    SETNP  al
+    RET
+_MonAsm_PointBehindPlane_5135 ENDP
 
 END

@@ -3,9 +3,11 @@
 #include <cmath>
 
 extern "C" {
-void __cdecl MonAsmAngleMatrix_5135(const mon::QAngle* angles, mon::matrix3x4_t* matrix);
-void __cdecl MonAsmAngleVectors_5135(const mon::QAngle* angles, mon::Vector* f, mon::Vector* r, mon::Vector* u);
-void __cdecl MonAsmMatrixInverseTR_5135(const mon::VMatrix* src, mon::VMatrix* dst);
+void __cdecl MonAsm_AngleMatrix_5135(const mon::QAngle* angles, mon::matrix3x4_t* matrix);
+void __cdecl MonAsm_AngleVectors_5135(const mon::QAngle* angles, mon::Vector* f, mon::Vector* r, mon::Vector* u);
+void __cdecl MonAsm_MatrixInverseTR_5135(const mon::VMatrix* src, mon::VMatrix* dst);
+void __cdecl MonAsm_PosAndNormToPlane_5135(const mon::Vector& pos, const mon::Vector& dir, mon::VPlane& out);
+bool __cdecl MonAsm_PointBehindPlane_5135(const mon::VPlane& plane, const mon::Vector& pt);
 }
 
 namespace mon {
@@ -19,7 +21,7 @@ VMatrix VMatrix::operator*(const VMatrix& vm) const
 
 static void AngleMatrix(const QAngle* angles, const Vector* position, matrix3x4_t* matrix)
 {
-    MonAsmAngleMatrix_5135(angles, matrix);
+    MonAsm_AngleMatrix_5135(angles, matrix);
     (*matrix)[0][3] = position->x;
     (*matrix)[1][3] = position->y;
     (*matrix)[2][3] = position->z;
@@ -37,8 +39,8 @@ static void MatrixSetIdentity(VMatrix& dst)
 
 Portal::Portal(const Vector& v, const QAngle& q) : pos{v}, ang{q}
 {
-    MonAsmAngleVectors_5135(&ang, &f, &r, &u);
-    plane = VPlane{f, (float)f.Dot(pos)};
+    MonAsm_AngleVectors_5135(&ang, &f, &r, &u);
+    MonAsm_PosAndNormToPlane_5135(pos, f, plane);
     AngleMatrix(&ang, &pos, &mat);
 
     // CPortalSimulator::MoveTo
@@ -70,7 +72,7 @@ Portal::Portal(const Vector& v, const QAngle& q) : pos{v}, ang{q}
 
 bool Portal::ShouldTeleport(const Entity& ent, bool check_portal_hole) const
 {
-    if (plane.n.Dot(ent.GetCenter()) >= plane.d)
+    if (!MonAsm_PointBehindPlane_5135(plane, ent.GetCenter()))
         return false;
     if (!check_portal_hole)
         return true;
@@ -108,7 +110,7 @@ void PortalPair::RecalcTpMatrices(PlacementOrder order_)
 
             // CProp_Portal_Shared::UpdatePortalTransformationMatrix
             VMatrix matPortal1ToWorldInv, matPortal2ToWorld, matRotation;
-            MonAsmMatrixInverseTR_5135(reinterpret_cast<const VMatrix*>(&p1_mat), &matPortal1ToWorldInv);
+            MonAsm_MatrixInverseTR_5135(reinterpret_cast<const VMatrix*>(&p1_mat), &matPortal1ToWorldInv);
             MatrixSetIdentity(matRotation);
             matRotation[0][0] = -1.0f;
             matRotation[1][1] = -1.0f;
@@ -117,7 +119,7 @@ void PortalPair::RecalcTpMatrices(PlacementOrder order_)
             matPortal2ToWorld[3][3] = 1.0f;
             p1_to_p2 = matPortal2ToWorld * matRotation * matPortal1ToWorldInv;
             // the bit right after in CProp_Portal::UpdatePortalTeleportMatrix
-            MonAsmMatrixInverseTR_5135(&p1_to_p2, &p2_to_p1);
+            MonAsm_MatrixInverseTR_5135(&p1_to_p2, &p2_to_p1);
             break;
         }
         case PlacementOrder::_ULM: {
@@ -130,7 +132,7 @@ void PortalPair::RecalcTpMatrices(PlacementOrder order_)
                 auto& p_to_other = i ? b_to_o : o_to_b;
 
                 VMatrix matLocalToWorldInv, matRotation;
-                MonAsmMatrixInverseTR_5135(&p_to_world, &matLocalToWorldInv);
+                MonAsm_MatrixInverseTR_5135(&p_to_world, &matLocalToWorldInv);
                 MatrixSetIdentity(matRotation);
                 matRotation[0][0] = -1.0f;
                 matRotation[1][1] = -1.0f;
