@@ -3,21 +3,23 @@
 #include <cmath>
 
 extern "C" {
-void __cdecl MonAsmAngleMatrix(const mon::QAngle* angles, mon::matrix3x4_t* matrix);
-void __cdecl MonAsmAngleVectors(const mon::QAngle* angles, mon::Vector* f, mon::Vector* r, mon::Vector* u);
-void __cdecl MonAsmMatrixInverseTR(const mon::VMatrix* src, mon::VMatrix* dst);
-void __cdecl MonAsmVector3DMultiply(const mon::VMatrix* src1, const mon::Vector* src2, mon::Vector* dst);
-void __cdecl MonAsmVMatrix__MatrixMul(const mon::VMatrix* lhs, const mon::VMatrix* rhs, mon::VMatrix* out);
-mon::Vector* __cdecl MonAsmVMatrix__operatorVec(const mon::VMatrix* lhs, mon::Vector* out, const mon::Vector* vVec);
-void __cdecl MonAsmPortal_CalcPlane(const mon::Vector* portal_pos, const mon::Vector* portal_f, mon::VPlane* out_plane);
-bool __cdecl MonAsmPortal_EntBehindPlane(const mon::VPlane* portal_plane, const mon::Vector* ent_center);
+void __cdecl MonAsmAngleMatrix_5135(const mon::QAngle* angles, mon::matrix3x4_t* matrix);
+void __cdecl MonAsmAngleVectors_5135(const mon::QAngle* angles, mon::Vector* f, mon::Vector* r, mon::Vector* u);
+void __cdecl MonAsmMatrixInverseTR_5135(const mon::VMatrix* src, mon::VMatrix* dst);
 }
 
 namespace mon {
 
+VMatrix VMatrix::operator*(const VMatrix& vm) const
+{
+    VMatrix ret;
+    MatrixMul(vm, ret);
+    return ret;
+}
+
 static void AngleMatrix(const QAngle* angles, const Vector* position, matrix3x4_t* matrix)
 {
-    MonAsmAngleMatrix(angles, matrix);
+    MonAsmAngleMatrix_5135(angles, matrix);
     (*matrix)[0][3] = position->x;
     (*matrix)[1][3] = position->y;
     (*matrix)[2][3] = position->z;
@@ -35,7 +37,7 @@ static void MatrixSetIdentity(VMatrix& dst)
 
 Portal::Portal(const Vector& v, const QAngle& q) : pos{v}, ang{q}
 {
-    MonAsmAngleVectors(&ang, &f, &r, &u);
+    MonAsmAngleVectors_5135(&ang, &f, &r, &u);
     plane = VPlane{f, (float)f.Dot(pos)};
     AngleMatrix(&ang, &pos, &mat);
 
@@ -106,17 +108,16 @@ void PortalPair::RecalcTpMatrices(PlacementOrder order_)
 
             // CProp_Portal_Shared::UpdatePortalTransformationMatrix
             VMatrix matPortal1ToWorldInv, matPortal2ToWorld, matRotation;
-            MonAsmMatrixInverseTR(reinterpret_cast<const VMatrix*>(&p1_mat), &matPortal1ToWorldInv);
+            MonAsmMatrixInverseTR_5135(reinterpret_cast<const VMatrix*>(&p1_mat), &matPortal1ToWorldInv);
             MatrixSetIdentity(matRotation);
             matRotation[0][0] = -1.0f;
             matRotation[1][1] = -1.0f;
             memcpy(&matPortal2ToWorld, &p2_mat, sizeof matrix3x4_t);
             matPortal2ToWorld[3][0] = matPortal2ToWorld[3][1] = matPortal2ToWorld[3][2] = 0.0f;
             matPortal2ToWorld[3][3] = 1.0f;
-            MonAsmVMatrix__MatrixMul(&matPortal2ToWorld, &matRotation, &p2_to_p1);
-            MonAsmVMatrix__MatrixMul(&p2_to_p1, &matPortal1ToWorldInv, &p1_to_p2);
+            p1_to_p2 = matPortal2ToWorld * matRotation * matPortal1ToWorldInv;
             // the bit right after in CProp_Portal::UpdatePortalTeleportMatrix
-            MonAsmMatrixInverseTR(&p1_to_p2, &p2_to_p1);
+            MonAsmMatrixInverseTR_5135(&p1_to_p2, &p2_to_p1);
             break;
         }
         case PlacementOrder::_ULM: {
@@ -128,13 +129,12 @@ void PortalPair::RecalcTpMatrices(PlacementOrder order_)
                 auto& other_to_world = i ? orange_to_world : blue_to_world;
                 auto& p_to_other = i ? b_to_o : o_to_b;
 
-                VMatrix matLocalToWorldInv, matRotation, tmp;
-                MonAsmMatrixInverseTR(&p_to_world, &matLocalToWorldInv);
+                VMatrix matLocalToWorldInv, matRotation;
+                MonAsmMatrixInverseTR_5135(&p_to_world, &matLocalToWorldInv);
                 MatrixSetIdentity(matRotation);
                 matRotation[0][0] = -1.0f;
                 matRotation[1][1] = -1.0f;
-                MonAsmVMatrix__MatrixMul(&other_to_world, &matRotation, &tmp);
-                MonAsmVMatrix__MatrixMul(&tmp, &matLocalToWorldInv, &p_to_other);
+                p_to_other = other_to_world * matRotation * matLocalToWorldInv;
             }
             break;
         }
@@ -146,37 +146,34 @@ void PortalPair::RecalcTpMatrices(PlacementOrder order_)
 
 Entity PortalPair::Teleport(const Entity& ent, bool tp_from_blue) const
 {
-    Vector oldCenter = ent.GetCenter();
-    const Vector& oldPlayerOrigin = ent.player.origin;
-    bool playerCrouched = ent.player.crouched;
+    Vector old_center = ent.GetCenter();
+    const Vector& old_player_origin = ent.player.origin;
+    bool player_crouched = ent.player.crouched;
 
     if (ent.is_player) {
         const Portal& p = tp_from_blue ? blue : orange;
         const Portal& op = tp_from_blue ? orange : blue;
 
-        if (!playerCrouched && std::fabsf(p.f.z) > 0.f &&
+        if (!player_crouched && std::fabsf(p.f.z) > 0.f &&
             (std::fabsf(std::fabs(p.f.z) - 1.f) >= .01f || std::fabsf(std::fabs(op.f.z) - 1.f) >= .01f)) {
             // curl up into a little ball
             if (p.f.z > 0.f)
-                oldCenter.z -= 16.f;
+                old_center.z -= 16.f;
             else
-                oldCenter.z += 16.f;
-            playerCrouched = true;
+                old_center.z += 16.f;
+            player_crouched = true;
         }
     }
 
-    Vector newCenter;
-    MonAsmVMatrix__operatorVec(tp_from_blue ? &b_to_o : &o_to_b, &newCenter, &oldCenter);
+    Vector new_center = (tp_from_blue ? b_to_o : o_to_b) * old_center;
     if (ent.is_player)
-        return Entity::CreatePlayerFromOrigin(newCenter + (oldPlayerOrigin - oldCenter), playerCrouched);
-    return Entity::CreateBall(newCenter, ent.ball.radius);
+        return Entity::CreatePlayerFromOrigin(new_center + (old_player_origin - old_center), player_crouched);
+    return Entity::CreateBall(new_center, ent.ball.radius);
 }
 
 Vector PortalPair::Teleport(const Vector& pt, bool tp_from_blue) const
 {
-    Vector v;
-    MonAsmVMatrix__operatorVec(tp_from_blue ? &b_to_o : &o_to_b, &v, &pt);
-    return v;
+    return (tp_from_blue ? b_to_o : o_to_b) * pt;
 }
 
 int BoxOnPlaneSide(const Vector& mins, const Vector& maxs, const VPlane& p, plane_bits bits)

@@ -203,6 +203,13 @@ struct VMatrix {
         return m[i];
     }
 
+private:
+    void MatrixMul(const VMatrix& vm, VMatrix& out) const;
+
+public:
+    VMatrix operator*(const VMatrix& vm) const;
+    Vector operator*(const Vector& v) const;
+
     std::string DebugToString() const;
 };
 

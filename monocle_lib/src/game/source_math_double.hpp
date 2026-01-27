@@ -157,6 +157,26 @@ struct VMatrixD {
     {
         return m[i];
     }
+
+    VMatrixD operator*(const VMatrixD& vm) const
+    {
+        VMatrixD ret;
+        std::fill(&ret[0][0], &ret[3][3] + 1, 0.);
+        for (int i = 0; i < 4; i++)
+            for (int j = 0; j < 4; j++)
+                for (int k = 0; k < 4; k++)
+                    ret[i][j] += m[i][k] * vm[k][j];
+        return ret;
+    }
+
+    VectorD operator*(const VectorD& v) const
+    {
+        VectorD res{m[0][3], m[1][3], m[2][3]};
+        for (int i = 0; i < 3; i++)
+            for (int j = 0; j < 3; j++)
+                res[i] += m[i][j] * v[j];
+        return res;
+    }
 };
 
 inline void MatrixSetIdentityD(VMatrixD& m)
@@ -169,14 +189,6 @@ inline void MatrixSetIdentityD(VMatrixD& m)
 inline void Vector3DMultiplyDirD(const VMatrixD& src1, VectorD src2, VectorD& dst)
 {
     dst = {0., 0., 0.};
-    for (int i = 0; i < 3; i++)
-        for (int j = 0; j < 3; j++)
-            dst[i] += src1[i][j] * src2[j];
-}
-
-inline void Vector3DMultiplyPosD(const VMatrixD& src1, VectorD src2, VectorD& dst)
-{
-    dst = {src1[0][3], src1[1][3], src1[2][3]};
     for (int i = 0; i < 3; i++)
         for (int j = 0; j < 3; j++)
             dst[i] += src1[i][j] * src2[j];
@@ -195,15 +207,6 @@ inline void MatrixInverseTR_D(const VMatrixD& src, VMatrixD& dst)
     dst.m[2][3] = vNewTrans.z;
     dst.m[3][0] = dst.m[3][1] = dst.m[3][2] = 0.;
     dst.m[3][3] = 1.;
-}
-
-inline void MatrixMultiplyD(const VMatrixD src1, const VMatrixD src2, VMatrixD& dst)
-{
-    std::fill(&dst[0][0], &dst[3][3] + 1, 0.);
-    for (int i = 0; i < 4; i++)
-        for (int j = 0; j < 4; j++)
-            for (int k = 0; k < 4; k++)
-                dst[i][j] += src1.m[i][k] * src2.m[k][j];
 }
 
 struct VPlaneD {
@@ -306,36 +309,34 @@ struct PortalPairD {
             MatrixSetIdentityD(matRotation);
             matRotation[0][0] = -1.f;
             matRotation[1][1] = -1.f;
-            MatrixMultiplyD(other_to_world, matRotation, tmp);
-            MatrixMultiplyD(tmp, matLocalToWorldInv, i == 0 ? b_to_o : o_to_b);
+            (i == 0 ? b_to_o : o_to_b) = other_to_world * matRotation * matLocalToWorldInv;
         }
     }
 
     EntityD Teleport(const EntityD& ent, bool tp_from_blue) const
     {
-        VectorD oldCenter = ent.GetCenter();
-        const VectorD& oldPlayerOrigin = ent.player.origin;
-        bool playerCrouched = ent.player.crouched;
+        VectorD old_center = ent.GetCenter();
+        const VectorD& old_player_origin = ent.player.origin;
+        bool player_crouched = ent.player.crouched;
 
         if (ent.is_player) {
             const PortalD& p = tp_from_blue ? blue : orange;
             const PortalD& op = tp_from_blue ? orange : blue;
 
-            if (!playerCrouched && std::abs(p.f.z) > 0.f &&
+            if (!player_crouched && std::abs(p.f.z) > 0.f &&
                 (std::abs(std::abs(p.f.z) - 1.f) >= .01f || std::abs(std::abs(op.f.z) - 1.f) >= .01f)) {
                 if (p.f.z > 0.f)
-                    oldCenter.z -= 16.f;
+                    old_center.z -= 16.f;
                 else
-                    oldCenter.z += 16.f;
-                playerCrouched = true;
+                    old_center.z += 16.f;
+                player_crouched = true;
             }
         }
 
-        VectorD newCenter;
-        Vector3DMultiplyPosD(tp_from_blue ? b_to_o : o_to_b, oldCenter, newCenter);
+        VectorD new_center = (tp_from_blue ? b_to_o : o_to_b) * old_center;
         if (ent.is_player)
-            return EntityD::CreatePlayerFromOrigin(newCenter + (oldPlayerOrigin - oldCenter), playerCrouched);
-        return EntityD::CreateBall(newCenter, ent.ball.radius);
+            return EntityD::CreatePlayerFromOrigin(new_center + (old_player_origin - old_center), player_crouched);
+        return EntityD::CreateBall(new_center, ent.ball.radius);
     }
 };
 
