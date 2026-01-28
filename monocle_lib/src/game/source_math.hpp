@@ -17,6 +17,12 @@
 
 namespace mon {
 
+// older versions of the game used x87 ops instead of SSE
+enum GameVersion : uint16_t {
+    GV_5135,
+    // GV_9862575,
+};
+
 constexpr float PORTAL_HALF_WIDTH = 32.f;
 constexpr float PORTAL_HALF_HEIGHT = 54.f;
 constexpr float PORTAL_HOLE_DEPTH = 500.f;
@@ -206,13 +212,10 @@ struct VMatrix {
     {
         return m[i];
     }
-
-private:
-    void MatrixMul(const VMatrix& vm, VMatrix& out) const;
-
 public:
-    VMatrix operator*(const VMatrix& vm) const;
-    Vector operator*(const Vector& v) const;
+    // replacements for operator*
+    VMatrix Multiply(const VMatrix& vm, GameVersion gv) const;
+    Vector Multiply(const Vector& v, GameVersion gv) const;
 
     std::string DebugToString() const;
 };
@@ -228,7 +231,7 @@ struct VPlane {
 #endif
     constexpr VPlane(const Vector& n, float d) : n{n}, d{d} {}
 
-    // not accurate to what game does
+    // not accurate to game code
     float DistTo(const Vector& v) const
     {
         return (float)(n.Dot(v) - d);
@@ -306,10 +309,12 @@ struct Portal {
     VPlane hole_planes[6];
     plane_bits hole_planes_bits[6]; // for fast box plane tests
 
-    Portal(const Vector& v, const QAngle& q);
+    GameVersion gv;
+
+    Portal(const Vector& v, const QAngle& q, GameVersion gv);
 
     // (slow) parse first 6 numbers as pos.x, pos.y, pos.z, ang.x, ang.y, ang.z with any delimeters
-    static std::optional<std::pair<Portal, std::from_chars_result>> FromString(std::string_view sv);
+    static std::optional<std::pair<Portal, std::from_chars_result>> FromString(std::string_view sv, GameVersion gv);
 
     // follows the logic in ShouldTeleportTouchingEntity
     bool ShouldTeleport(const Entity& ent, bool check_portal_hole) const;
@@ -428,8 +433,9 @@ struct PortalPair {
                const QAngle& blue_ang,
                const Vector& orange_pos,
                const QAngle& orange_ang,
-               PlacementOrder order)
-        : blue{blue_pos, blue_ang}, orange{orange_pos, orange_ang}, order{order}
+               PlacementOrder order,
+               GameVersion gv)
+        : blue{blue_pos, blue_ang, gv}, orange{orange_pos, orange_ang, gv}, order{order}
     {
         RecalcTpMatrices(order);
     }

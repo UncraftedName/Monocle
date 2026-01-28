@@ -53,12 +53,13 @@ int main(int argc, char* argv[])
     int _test_it = GENERATE(range(0, n)); \
     INFO("test iteration " << _test_it)
 
-static mon::Portal RandomPortal(small_prng& rng)
+static mon::Portal RandomPortal(small_prng& rng, mon::GameVersion gv)
 {
     constexpr float p_min = -3000.f, p_max = 3000.f, a_min = -180.f, a_max = 180.f;
     return mon::Portal{
         mon::Vector{rng.next_float(p_min, p_max), rng.next_float(p_min, p_max), rng.next_float(p_min, p_max)},
         mon::QAngle{rng.next_float(a_min, a_max), rng.next_float(a_min, a_max), rng.next_float(a_min, a_max)},
+        gv,
     };
 }
 
@@ -206,7 +207,7 @@ TEST_CASE("ShouldTeleport (no portal hole check)")
 {
     REPEAT_TEST(1000);
     static small_prng rng;
-    mon::Portal p = RandomPortal(rng);
+    mon::Portal p = RandomPortal(rng, mon::GV_5135);
     bool is_player = rng.next_bool();
     INFO("entity is " << (is_player ? "player" : "non-player"));
 
@@ -294,7 +295,7 @@ TEST_CASE("ShouldTeleport (with portal hole check")
         ang = mon::QAngle{rng.next_float(-180.f, 180.f), rng.next_float(-180.f, 180.f), rng.next_float(-180.f, 180.f)};
     }
 
-    mon::Portal p{pos, ang};
+    mon::Portal p{pos, ang, mon::GV_5135};
 
     INFO("corner: " << ((corner_bits & 1) ? "-f " : "+f ") << ((corner_bits & 2) ? "-r " : "+r ")
                     << ((corner_bits & 4) ? "-u" : "+u"));
@@ -359,10 +360,10 @@ TEST_CASE("Portal from string (newlocation)")
     REPEAT_TEST(100);
     small_prng rng{(uint32_t)_test_it};
 
-    mon::Portal p_ref = RandomPortal(rng);
+    mon::Portal p_ref = RandomPortal(rng, mon::GV_5135);
     std::string cmd = p_ref.NewLocationCmd("blue");
 
-    auto res = mon::Portal::FromString(cmd);
+    auto res = mon::Portal::FromString(cmd, p_ref.gv);
     REQUIRE(res.has_value());
     REQUIRE(res->second.ptr == &*--cmd.end());
     REQUIRE(res->first.pos == p_ref.pos);
@@ -371,7 +372,7 @@ TEST_CASE("Portal from string (newlocation)")
 
 TEST_CASE("Portal from string (fail)")
 {
-    auto res = mon::Portal::FromString("1 2 3 4 5");
+    auto res = mon::Portal::FromString("1 2 3 4 5", mon::GV_5135);
     REQUIRE_FALSE(res.has_value());
 }
 
@@ -379,8 +380,8 @@ TEST_CASE("Teleport")
 {
     REPEAT_TEST(10000);
     static small_prng rng;
-    mon::Portal p1 = RandomPortal(rng);
-    mon::Portal p2 = RandomPortal(rng);
+    mon::Portal p1 = RandomPortal(rng, mon::GV_5135);
+    mon::Portal p2 = RandomPortal(rng, mon::GV_5135);
     int translate_mask = rng.next_int(0, 16);
     int order = rng.next_int(0, (int)mon::PlacementOrder::COUNT);
     bool p1_teleporting = rng.next_bool();
@@ -417,7 +418,7 @@ TEST_CASE("Nudging point towards portal plane (close)")
 {
     REPEAT_TEST(10000);
     static small_prng rng;
-    mon::Portal p = RandomPortal(rng);
+    mon::Portal p = RandomPortal(rng, mon::GV_5135);
     for (int i = 0; i < 3; i++)
         if (fabsf(p.pos[i]) < 0.5f)
             return;
@@ -451,7 +452,7 @@ TEST_CASE("Nudging point towards portal plane (close)")
 TEST_CASE("Nudging point towards portal plane (far)")
 {
     static small_prng rng;
-    mon::Portal p = RandomPortal(rng);
+    mon::Portal p = RandomPortal(rng, mon::GV_5135);
     mon::Entity ent = mon::Entity::CreatePlayerFromCenter(p.pos + p.r * 2.5f - p.u * 1.5f + p.f * 12345.f, false);
     auto [nudged_ent, plane_dist] = mon::ProjectEntityToPortalPlane(ent, p);
     REQUIRE(!!plane_dist.is_valid);
@@ -478,6 +479,7 @@ TEST_CASE("Teleport chain results in VAG")
         {-127.96875f, -191.24300f, 182.03125f},
         {0.f, 0.f, 0.f},
         mon::PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED,
+        mon::GV_5135,
     };
 
     mon::TeleportChainParams params{
@@ -557,6 +559,7 @@ TEST_CASE("Teleport chain results in 5 teleports (cum=1)")
         {-127.96875f, -191.24300f, 182.03125f},
         {0.f, 0.f, 0.f},
         mon::PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED,
+        mon::GV_5135,
     };
 
     mon::TeleportChainParams params{
@@ -646,6 +649,7 @@ TEST_CASE("Teleport chain results in 6 teleports (cum=-2)")
         {511.96875f, 25.968760f, 54.031242f},
         {-0.f, 180.f, 0.f},
         mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+        mon::GV_5135,
     };
 
     mon::TeleportChainParams params{
@@ -744,6 +748,7 @@ TEST_CASE("Finite teleport chain results in free edicts")
         {-127.96875f, -191.24300f, 182.03125f},
         {0.f, 0.f, 0.f},
         mon::PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED,
+        mon::GV_5135,
     };
 
     mon::TeleportChainParams params{
@@ -772,6 +777,7 @@ TEST_CASE("19 Lochness")
         {-394.776428f, -56.0312462f, 38.8377686f},
         {-44.9994202f, 180.f, 0.f},
         mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+        mon::GV_5135,
     };
 
     mon::TeleportChainParams params{
@@ -802,6 +808,7 @@ TEST_CASE("E01 AAG")
         {-233.054321f, 652.257446f, -255.96875f},
         {-90.f, 155.909348f, 0.f},
         mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+        mon::GV_5135,
     };
 
     mon::TeleportChainParams params{
@@ -838,6 +845,7 @@ TEST_CASE("00 AAG")
         {-735.139282f, -923.540344f, 128.03125f},
         {-90.f, 55.0390396f, 0.f},
         mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+        mon::GV_5135,
     };
 
     mon::TeleportChainParams params{
@@ -991,8 +999,8 @@ TEST_CASE_PERSISTENT_FIXTURE(SptIpcConnFixture, "SPT with IPC")
 
     int iteration = 0;
     while (iteration < 1000) {
-        mon::Portal blue = RandomPortal(rng);
-        mon::Portal orange = RandomPortal(rng);
+        mon::Portal blue = RandomPortal(rng, mon::GV_5135);
+        mon::Portal orange = RandomPortal(rng, mon::GV_5135);
         /*
         * Don't use portals that are too close to each other - this can cause false positives with
         * the distance threshold to the teleport destination.
@@ -1107,8 +1115,8 @@ public:
         REPEAT_TEST(1000);
         small_prng rng{(uint32_t)_test_it};
         mon::PortalPair pp{
-            RandomPortal(rng),
-            RandomPortal(rng),
+            RandomPortal(rng, mon::GV_5135),
+            RandomPortal(rng, mon::GV_5135),
             (mon::PlacementOrder)rng.next_int(0, (int)mon::PlacementOrder::COUNT),
         };
 

@@ -135,7 +135,7 @@ std::string VMatrix::DebugToString() const
     return DebugFmtMatrix((float*)m, 4, 4);
 }
 
-std::optional<std::pair<Portal, std::from_chars_result>> Portal::FromString(std::string_view sv)
+std::optional<std::pair<Portal, std::from_chars_result>> Portal::FromString(std::string_view sv, GameVersion gv)
 {
     std::array<float, 6> flts;
 
@@ -157,7 +157,7 @@ std::optional<std::pair<Portal, std::from_chars_result>> Portal::FromString(std:
         }
     }
 
-    return std::pair(Portal{{flts[0], flts[1], flts[2]}, {flts[3], flts[4], flts[5]}}, res);
+    return std::pair(Portal{{flts[0], flts[1], flts[2]}, {flts[3], flts[4], flts[5]}, gv}, res);
 }
 
 } // namespace mon

@@ -128,6 +128,7 @@ static void GenerateResultsDistributionsToFile()
                 RandomPos(rng, rng.next_int(0, 8), std::get<0>(orange_opts)),
                 RandomAng(rng, (PITCH_YAW_TYPE)std::get<1>(orange_opts), std::get<2>(orange_opts)),
                 (mon::PlacementOrder)std::get<0>(misc_opts),
+                mon::GV_5135,
             };
             mon::Vector ent_pos =
                 pp.blue.pos + pp.blue.r * rng.next_float(-mon::PORTAL_HALF_WIDTH * .5f, mon::PORTAL_HALF_WIDTH * .5f) +
@@ -258,6 +259,7 @@ static void FindVagIn04()
             {-448, 0.03125, 54.9502},
             {0, 90, 0},
             mon::PlacementOrder::BLUE_WAS_CLOSED_ORANGE_OPENED,
+            mon::GV_5135,
         };
         float r = rng.next_float(-mon::PORTAL_HALF_WIDTH * 0.5f, mon::PORTAL_HALF_WIDTH * 0.5f);
         float u = rng.next_float(-mon::PORTAL_HALF_HEIGHT * 0.5f, mon::PORTAL_HALF_HEIGHT * 0.5f);
@@ -338,6 +340,7 @@ static void FindComplexChain()
             pos_space.RandomPtInBox(rng),
             {0, rng.next_int(-2, 2) * 90.f, 0},
             mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+            mon::GV_5135,
         };
         if (pp.blue.pos.DistToSqr(pp.orange.pos) < 200 * 200)
             continue;
@@ -372,6 +375,7 @@ static void DebugInfinite09Chain()
         {-127.96875f, -191.24300f, 182.03125f},
         {0.f, 0.f, 0.f},
         mon::PlacementOrder::ORANGE_WAS_CLOSED_BLUE_MOVED,
+        mon::GV_5135,
     };
 
     mon::TeleportChainParams params{
@@ -398,6 +402,7 @@ static void CreateSpinAnimation()
             pos_space.RandomPtInBox(rng),
             {rng.next_float(-180.f, 180.f), rng.next_float(-180.f, 180.f), 0},
             mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+            mon::GV_5135,
         };
         if (pp.blue.pos.DistToSqr(pp.orange.pos) < 100 * 100)
             continue;
@@ -417,7 +422,14 @@ static void CreateSpinAnimation()
         if (result.max_tps_exceeded || result.cum_teleports != -1)
             continue;
         for (int i = -180; i < 180; i++) {
-            mon::PortalPair pp2{pp.blue.pos, {pp.blue.ang.x, (float)i, 0}, pp.orange.pos, pp.orange.ang, pp.order};
+            mon::PortalPair pp2{
+                pp.blue.pos,
+                {pp.blue.ang.x, (float)i, 0},
+                pp.orange.pos,
+                pp.orange.ang,
+                pp.order,
+                mon::GV_5135,
+            };
             char name[32];
             sprintf(name, "spin_anim/ang_%03d.tga", (360 + (i % 360)) % 360);
             CreateOverlayPortalImage(pp2, name, 350, true);
@@ -440,6 +452,7 @@ static void FindInfiniteChain()
             pos_space.RandomPtInBox(rng),
             {0, rng.next_int(-2, 2) * 90.f, 0},
             mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+            mon::GV_5135,
         };
         if (pp.blue.pos.DistToSqr(pp.orange.pos) < 100 * 100)
             continue;
@@ -473,6 +486,7 @@ static void FindFiniteChainThatGivesNFE()
             pos_space.RandomPtInBox(rng),
             {0, rng.next_int(-2, 2) * 90.f, 0},
             mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
+            mon::GV_5135,
         };
         if (pp.blue.pos.DistToSqr(pp.orange.pos) < 100 * 100)
             continue;

@@ -3,28 +3,59 @@
 #include <cmath>
 
 extern "C" {
-void __cdecl MonAsm_AngleMatrix_5135(const mon::QAngle* angles, mon::matrix3x4_t* matrix);
-void __cdecl MonAsm_AngleVectors_5135(const mon::QAngle* angles, mon::Vector* f, mon::Vector* r, mon::Vector* u);
-void __cdecl MonAsm_MatrixInverseTR_5135(const mon::VMatrix* src, mon::VMatrix* dst);
+void __fastcall MonAsm_MatrixMul_5135(const mon::VMatrix& a, int edx, const mon::VMatrix& b, mon::VMatrix& out);
+void __fastcall MonAsm_MatrixMulVector_5135(const mon::VMatrix& mat, int edx, mon::Vector& out, const mon::Vector& v);
+void __cdecl MonAsm_AngleMatrix_5135(const mon::QAngle& angles, mon::matrix3x4_t& matrix);
+void __cdecl MonAsm_AngleVectors_5135(const mon::QAngle& angles, mon::Vector* f, mon::Vector* r, mon::Vector* u);
+void __cdecl MonAsm_MatrixInverseTR_5135(const mon::VMatrix& src, mon::VMatrix& dst);
 void __cdecl MonAsm_PosAndNormToPlane_5135(const mon::Vector& pos, const mon::Vector& dir, mon::VPlane& out);
 bool __cdecl MonAsm_PointBehindPlane_5135(const mon::VPlane& plane, const mon::Vector& pt);
 }
 
+// error on missing switch cases
+#pragma warning(push)
+#pragma warning(error : 4061 4062)
+
 namespace mon {
 
-VMatrix VMatrix::operator*(const VMatrix& vm) const
+VMatrix VMatrix::Multiply(const VMatrix& vm, GameVersion gv) const
 {
     VMatrix ret;
-    MatrixMul(vm, ret);
+    switch (gv) {
+        case GV_5135:
+            MonAsm_MatrixMul_5135(*this, 0, vm, ret);
+            break;
+        default:
+            MON_UNREACHABLE();
+    }
     return ret;
 }
 
-static void AngleMatrix(const QAngle* angles, const Vector* position, matrix3x4_t* matrix)
+Vector VMatrix::Multiply(const Vector& v, GameVersion gv) const
 {
-    MonAsm_AngleMatrix_5135(angles, matrix);
-    (*matrix)[0][3] = position->x;
-    (*matrix)[1][3] = position->y;
-    (*matrix)[2][3] = position->z;
+    Vector ret;
+    switch (gv) {
+        case GV_5135:
+            MonAsm_MatrixMulVector_5135(*this, 0, ret, v);
+            break;
+        default:
+            MON_UNREACHABLE();
+    }
+    return ret;
+}
+
+static void AngleMatrix(const QAngle& angles, const Vector& position, matrix3x4_t& matrix, GameVersion gv)
+{
+    switch (gv) {
+        case mon::GV_5135:
+            MonAsm_AngleMatrix_5135(angles, matrix);
+            break;
+        default:
+            MON_UNREACHABLE();
+    }
+    matrix[0][3] = position.x;
+    matrix[1][3] = position.y;
+    matrix[2][3] = position.z;
 }
 
 static void MatrixSetIdentity(VMatrix& dst)
@@ -37,11 +68,17 @@ static void MatrixSetIdentity(VMatrix& dst)
     // clang-format on
 }
 
-Portal::Portal(const Vector& v, const QAngle& q) : pos{v}, ang{q}
+Portal::Portal(const Vector& v, const QAngle& q, GameVersion gv) : pos{v}, ang{q}, gv{gv}
 {
-    MonAsm_AngleVectors_5135(&ang, &f, &r, &u);
-    MonAsm_PosAndNormToPlane_5135(pos, f, plane);
-    AngleMatrix(&ang, &pos, &mat);
+    switch (gv) {
+        case GV_5135:
+            MonAsm_AngleVectors_5135(ang, &f, &r, &u);
+            MonAsm_PosAndNormToPlane_5135(pos, f, plane);
+            break;
+        default:
+            MON_UNREACHABLE();
+    }
+    AngleMatrix(ang, pos, mat, gv);
 
     // CPortalSimulator::MoveTo
     // outward facing placnes: forward, backward, up, down, left, right
@@ -72,7 +109,16 @@ Portal::Portal(const Vector& v, const QAngle& q) : pos{v}, ang{q}
 
 bool Portal::ShouldTeleport(const Entity& ent, bool check_portal_hole) const
 {
-    if (!MonAsm_PointBehindPlane_5135(plane, ent.GetCenter()))
+    decltype(&MonAsm_PointBehindPlane_5135) point_behind_fn = nullptr;
+    switch (gv) {
+        case GV_5135:
+            point_behind_fn = MonAsm_PointBehindPlane_5135;
+            break;
+        default:
+            MON_UNREACHABLE();
+    }
+
+    if (!point_behind_fn(plane, ent.GetCenter()))
         return false;
     if (!check_portal_hole)
         return true;
@@ -99,6 +145,18 @@ bool Portal::ShouldTeleport(const Entity& ent, bool check_portal_hole) const
 
 void PortalPair::RecalcTpMatrices(PlacementOrder order_)
 {
+    MON_ASSERT(blue.gv == orange.gv);
+    GameVersion gv = blue.gv;
+
+    decltype(&MonAsm_MatrixInverseTR_5135) mat_inv_fn = nullptr;
+    switch (gv) {
+        case GV_5135:
+            mat_inv_fn = MonAsm_MatrixInverseTR_5135;
+            break;
+        default:
+            MON_UNREACHABLE();
+    }
+
     switch (order_) {
         case PlacementOrder::_BLUE_UPTM:
         case PlacementOrder::_ORANGE_UPTM: {
@@ -110,16 +168,16 @@ void PortalPair::RecalcTpMatrices(PlacementOrder order_)
 
             // CProp_Portal_Shared::UpdatePortalTransformationMatrix
             VMatrix matPortal1ToWorldInv, matPortal2ToWorld, matRotation;
-            MonAsm_MatrixInverseTR_5135(reinterpret_cast<const VMatrix*>(&p1_mat), &matPortal1ToWorldInv);
+            mat_inv_fn(*reinterpret_cast<const VMatrix*>(&p1_mat), matPortal1ToWorldInv);
             MatrixSetIdentity(matRotation);
             matRotation[0][0] = -1.0f;
             matRotation[1][1] = -1.0f;
             memcpy(&matPortal2ToWorld, &p2_mat, sizeof matrix3x4_t);
             matPortal2ToWorld[3][0] = matPortal2ToWorld[3][1] = matPortal2ToWorld[3][2] = 0.0f;
             matPortal2ToWorld[3][3] = 1.0f;
-            p1_to_p2 = matPortal2ToWorld * matRotation * matPortal1ToWorldInv;
+            p1_to_p2 = matPortal2ToWorld.Multiply(matRotation, gv).Multiply(matPortal1ToWorldInv, gv);
             // the bit right after in CProp_Portal::UpdatePortalTeleportMatrix
-            MonAsm_MatrixInverseTR_5135(&p1_to_p2, &p2_to_p1);
+            mat_inv_fn(p1_to_p2, p2_to_p1);
             break;
         }
         case PlacementOrder::_ULM: {
@@ -132,16 +190,17 @@ void PortalPair::RecalcTpMatrices(PlacementOrder order_)
                 auto& p_to_other = i ? b_to_o : o_to_b;
 
                 VMatrix matLocalToWorldInv, matRotation;
-                MonAsm_MatrixInverseTR_5135(&p_to_world, &matLocalToWorldInv);
+                mat_inv_fn(p_to_world, matLocalToWorldInv);
                 MatrixSetIdentity(matRotation);
                 matRotation[0][0] = -1.0f;
                 matRotation[1][1] = -1.0f;
-                p_to_other = other_to_world * matRotation * matLocalToWorldInv;
+                p_to_other = other_to_world.Multiply(matRotation, gv).Multiply(matLocalToWorldInv, gv);
             }
             break;
         }
+        case PlacementOrder::COUNT:
         default:
-            MON_ASSERT(0);
+            MON_UNREACHABLE();
     }
     order = order_;
 }
@@ -167,7 +226,7 @@ Entity PortalPair::Teleport(const Entity& ent, bool tp_from_blue) const
         }
     }
 
-    Vector new_center = (tp_from_blue ? b_to_o : o_to_b) * old_center;
+    Vector new_center = Teleport(old_center, tp_from_blue);
     if (ent.is_player)
         return Entity::CreatePlayerFromOrigin(new_center + (old_player_origin - old_center), player_crouched);
     return Entity::CreateBall(new_center, ent.ball.radius);
@@ -175,7 +234,8 @@ Entity PortalPair::Teleport(const Entity& ent, bool tp_from_blue) const
 
 Vector PortalPair::Teleport(const Vector& pt, bool tp_from_blue) const
 {
-    return (tp_from_blue ? b_to_o : o_to_b) * pt;
+    MON_ASSERT(blue.gv == orange.gv);
+    return (tp_from_blue ? b_to_o : o_to_b).Multiply(pt, blue.gv);
 }
 
 int BoxOnPlaneSide(const Vector& mins, const Vector& maxs, const VPlane& p, plane_bits bits)
@@ -223,8 +283,7 @@ int BoxOnPlaneSide(const Vector& mins, const Vector& maxs, const VPlane& p, plan
             d2 = p.n[0] * maxs[0] + p.n[1] * maxs[1] + p.n[2] * maxs[2];
             break;
         default:
-            MON_ASSERT(0);
-            d1 = d2 = 0.f;
+            MON_UNREACHABLE();
     }
     int r = 0;
     if (d1 >= p.d)
@@ -299,3 +358,5 @@ bool Entity::operator==(const Entity& other) const
 }
 
 } // namespace mon
+
+#pragma warning(pop)

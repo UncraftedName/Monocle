@@ -47,10 +47,10 @@ struct SearchPortal {
     Vector locked_pos;
     QAngle locked_ang;
 
-    Portal Generate(small_prng& rng) const
+    Portal Generate(small_prng& rng, GameVersion gv) const
     {
         if (locked)
-            return Portal{locked_pos, locked_ang};
+            return Portal{locked_pos, locked_ang, gv};
         QAngle ang;
         int lock_axis;
         switch (type) {
@@ -88,7 +88,7 @@ struct SearchPortal {
             lock_axis == 1 ? lock_ax_val : rng.next_float(pos_space.mins[1], pos_space.maxs[1]),
             lock_axis == 2 ? lock_ax_val : rng.next_float(pos_space.mins[2], pos_space.maxs[2]),
         };
-        return Portal{pos, ang};
+        return Portal{pos, ang, gv};
     }
 };
 
@@ -127,6 +127,7 @@ struct SearchSpace {
     std::vector<PlacementOrder> valid_placement_orders;
     bool tp_from_blue;
     bool tp_player;
+    GameVersion gv = mon::GV_5135;
 
     TeleportChainParams params; // initialized here, NOTE: pp will point to garbag
 
@@ -138,8 +139,8 @@ struct SearchSpace {
             SearchResult st{
                 .n_iterations = i,
                 .pp{
-                    blue_search.Generate(rng),
-                    orange_search.Generate(rng),
+                    blue_search.Generate(rng, gv),
+                    orange_search.Generate(rng, gv),
                     rng.next_elem(valid_placement_orders),
                 },
             };

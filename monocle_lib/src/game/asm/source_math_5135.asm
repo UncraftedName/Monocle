@@ -1,30 +1,4 @@
-.686
-.MODEL FLAT
-
-; I'm not exactly an assembler pro, so I don't really understand the full reasons behind this, but
-; to link the mangled C++ names directly I have to:
-; - not specify a language (no 'OPTION LANGUAGE' and no '.model flat, C')
-; - not use aliases (that causes MSVC to jump to zero-filled mememory instead of my function)
-;
-; If I decide to switch this out to thunks like:
-; float Dot(const Vector& o) const { return MonAsmVectorDot(this, &o); }
-; then I either need to use C as the language in this file or add an underscore to the symbol.
-
-Vector STRUCT
-    x DWORD ?
-    y DWORD ?
-    z DWORD ?
-Vector ENDS
-
-VPlane STRUCT
-    n Vector <>
-    d DWORD ?
-VPlane ENDS
-
-.const
-
-DEG2RAD_MUL_F REAL4 0.017453292 ; float(PI/180)
-NEG1_F REAL4 -1.0
+INCLUDE math_interface.inc
 
 .code
 
@@ -365,7 +339,7 @@ src_not_dst:
 MonAsmVector3DMultiply_5135 ENDP
 
 ; void __thiscall VMatrix::MatrixMul(VMatrix *this, VMatrix *vm, VMatrix *out) : server.dll[0x454e30]
-?MatrixMul@VMatrix@mon@@ABEXABU12@AAU12@@Z PROC PUBLIC
+@MonAsm_MatrixMul_5135@16 PROC PUBLIC
     SUB ESP, 20h
     MOV EAX, [ESP + 24h]
     FLD dword ptr [EAX + 24h]
@@ -584,10 +558,10 @@ MonAsmVector3DMultiply_5135 ENDP
     FSTP dword ptr [EAX + 3Ch]
     ADD ESP, 20h
     RET 8
-?MatrixMul@VMatrix@mon@@ABEXABU12@AAU12@@Z ENDP
+@MonAsm_MatrixMul_5135@16 ENDP
 
 ; Vector* __thiscall VMatrix::operator*(VMatrix *this,Vector *__return_storage_ptr__,Vector *vVec) : server.dll[0x3fe020]
-??DVMatrix@mon@@QBE?AUVector@1@ABU21@@Z PROC PUBLIC
+@MonAsm_MatrixMulVector_5135@16 PROC PUBLIC
     MOV EDX, [ESP + 8]
     FLD dword ptr [ECX + 4]
     FMUL dword ptr [EDX + 4]
@@ -621,21 +595,7 @@ MonAsmVector3DMultiply_5135 ENDP
     FADD dword ptr [ECX + 2Ch]
     FSTP dword ptr [EAX + 8]
     RET 8
-??DVMatrix@mon@@QBE?AUVector@1@ABU21@@Z ENDP
-
-; float mon::Vector::Dot(const Vector& v) : server.dll[0x42b89e]
-?Dot@Vector@mon@@QBENABU12@@Z PROC PUBLIC
-    MOV  eax, [ESP + 4]
-    FLD  dword ptr [ecx + Vector.y]
-    FMUL dword ptr [eax + Vector.y]
-    FLD  dword ptr [ecx + Vector.z]
-    FMUL dword ptr [eax + Vector.z]
-    FADDP
-    FLD  dword ptr [ecx + Vector.x]
-    FMUL dword ptr [eax + Vector.x]
-    FADDP
-    RET 4
-?Dot@Vector@mon@@QBENABU12@@Z ENDP
+@MonAsm_MatrixMulVector_5135@16 ENDP
 
 ; void __cdecl MonAsm_PosAndNormToPlane_5135(const mon::Vector& pos, const mon::Vector& dir, mon::VPlane& out) : server.dll[0x427bd5]
 _MonAsm_PosAndNormToPlane_5135 PROC PUBLIC

@@ -1,7 +1,8 @@
 set(SRC_FILES
-	"src/game/source_math_5135.asm"
 	"src/game/source_math.cpp"
 	"src/game/source_math_strings.cpp"
+	"src/game/asm/math_consts.asm"
+	"src/game/asm/source_math_5135.asm"
 	"src/teleport_chain/ent_to_portal.cpp"
 	"src/teleport_chain/generate.cpp"
 	"src/teleport_chain/debug/csv_precision_compare.cpp"
