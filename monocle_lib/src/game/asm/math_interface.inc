@@ -1,4 +1,5 @@
 .686
+.XMM
 .MODEL FLAT
 
 ; I'm not exactly an assembler pro, so I don't really understand the full reasons behind this, but
@@ -23,3 +24,4 @@ VPlane ENDS
 
 EXTERN DEG2RAD_MUL_F:REAL4
 EXTERN NEG1_F:REAL4
+EXTERN SIGNMASK_16F:XMMWORD

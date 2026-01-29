@@ -2,57 +2,68 @@
 
 #include <cmath>
 
+#define MON_ENUMERATE_GV_1(X, arg1)          \
+    X(mon::GameVersion::GV_5135, 5135, arg1) \
+    X(mon::GameVersion::GV_9862575, 9862575, arg1)
+
+// clang-format off
+
 extern "C" {
-void __fastcall MonAsm_MatrixMul_5135(const mon::VMatrix& a, int edx, const mon::VMatrix& b, mon::VMatrix& out);
-void __fastcall MonAsm_MatrixMulVector_5135(const mon::VMatrix& mat, int edx, mon::Vector& out, const mon::Vector& v);
-void __cdecl MonAsm_AngleMatrix_5135(const mon::QAngle& angles, mon::matrix3x4_t& matrix);
-void __cdecl MonAsm_AngleVectors_5135(const mon::QAngle& angles, mon::Vector* f, mon::Vector* r, mon::Vector* u);
-void __cdecl MonAsm_MatrixInverseTR_5135(const mon::VMatrix& src, mon::VMatrix& dst);
-void __cdecl MonAsm_PosAndNormToPlane_5135(const mon::Vector& pos, const mon::Vector& dir, mon::VPlane& out);
-bool __cdecl MonAsm_PointBehindPlane_5135(const mon::VPlane& plane, const mon::Vector& pt);
+
+#define MON_DECLARE_ASM_FNS_X(_, suffix, ...) \
+    void __fastcall MonAsm_MatrixMul_##suffix(const mon::VMatrix& a, int edx, const mon::VMatrix& b, mon::VMatrix& out); \
+    void __fastcall MonAsm_MatrixMulVector_##suffix(const mon::VMatrix& mat, int edx, mon::Vector& out, const mon::Vector& v); \
+    void __cdecl MonAsm_AngleMatrix_##suffix(const mon::QAngle& angles, mon::matrix3x4_t& matrix); \
+    void __cdecl MonAsm_AngleVectors_##suffix(const mon::QAngle& angles, mon::Vector* f, mon::Vector* r, mon::Vector* u); \
+    void __cdecl MonAsm_MatrixInverseTR_##suffix(const mon::VMatrix& src, mon::VMatrix& dst); \
+    void __cdecl MonAsm_PosAndNormToPlane_##suffix(const mon::Vector& pos, const mon::Vector& dir, mon::VPlane& out); \
+    bool __cdecl MonAsm_PointBehindPlane_##suffix(const mon::VPlane& plane, const mon::Vector& pt); \
+
+    MON_ENUMERATE_GV_1(MON_DECLARE_ASM_FNS_X,);
+
 }
+
+// clang-format on
 
 // error on missing switch cases
 #pragma warning(push)
 #pragma warning(error : 4061 4062)
 
+#define MON_GV_FN_CASES_X(enum_val, suffix, assignment) \
+    case enum_val:                                      \
+        assignment##_##suffix;                          \
+        break;
+
+#define MON_GET_GAME_FN(local_var, asm_fn_name, gv)                    \
+    decltype(&asm_fn_name##_5135) local_var = nullptr;                 \
+    switch (gv) {                                                      \
+        MON_ENUMERATE_GV_1(MON_GV_FN_CASES_X, local_var = asm_fn_name) \
+        default:                                                       \
+            MON_UNREACHABLE();                                         \
+    }
+
 namespace mon {
 
 VMatrix VMatrix::Multiply(const VMatrix& vm, GameVersion gv) const
 {
+    MON_GET_GAME_FN(matrix_mul_fn, MonAsm_MatrixMul, gv);
     VMatrix ret;
-    switch (gv) {
-        case GV_5135:
-            MonAsm_MatrixMul_5135(*this, 0, vm, ret);
-            break;
-        default:
-            MON_UNREACHABLE();
-    }
+    matrix_mul_fn(*this, 0, vm, ret);
     return ret;
 }
 
 Vector VMatrix::Multiply(const Vector& v, GameVersion gv) const
 {
+    MON_GET_GAME_FN(matrix_mul_vec_fn, MonAsm_MatrixMulVector, gv);
     Vector ret;
-    switch (gv) {
-        case GV_5135:
-            MonAsm_MatrixMulVector_5135(*this, 0, ret, v);
-            break;
-        default:
-            MON_UNREACHABLE();
-    }
+    matrix_mul_vec_fn(*this, 0, ret, v);
     return ret;
 }
 
 static void AngleMatrix(const QAngle& angles, const Vector& position, matrix3x4_t& matrix, GameVersion gv)
 {
-    switch (gv) {
-        case mon::GV_5135:
-            MonAsm_AngleMatrix_5135(angles, matrix);
-            break;
-        default:
-            MON_UNREACHABLE();
-    }
+    MON_GET_GAME_FN(angle_matrix_fn, MonAsm_AngleMatrix, gv);
+    angle_matrix_fn(angles, matrix);
     matrix[0][3] = position.x;
     matrix[1][3] = position.y;
     matrix[2][3] = position.z;
@@ -70,14 +81,10 @@ static void MatrixSetIdentity(VMatrix& dst)
 
 Portal::Portal(const Vector& v, const QAngle& q, GameVersion gv) : pos{v}, ang{q}, gv{gv}
 {
-    switch (gv) {
-        case GV_5135:
-            MonAsm_AngleVectors_5135(ang, &f, &r, &u);
-            MonAsm_PosAndNormToPlane_5135(pos, f, plane);
-            break;
-        default:
-            MON_UNREACHABLE();
-    }
+    MON_GET_GAME_FN(angle_vectors_fn, MonAsm_AngleVectors, gv);
+    MON_GET_GAME_FN(pos_and_norm_to_plane_fn, MonAsm_PosAndNormToPlane, gv);
+    angle_vectors_fn(ang, &f, &r, &u);
+    pos_and_norm_to_plane_fn(pos, f, plane);
     AngleMatrix(ang, pos, mat, gv);
 
     // CPortalSimulator::MoveTo
@@ -109,16 +116,8 @@ Portal::Portal(const Vector& v, const QAngle& q, GameVersion gv) : pos{v}, ang{q
 
 bool Portal::ShouldTeleport(const Entity& ent, bool check_portal_hole) const
 {
-    decltype(&MonAsm_PointBehindPlane_5135) point_behind_fn = nullptr;
-    switch (gv) {
-        case GV_5135:
-            point_behind_fn = MonAsm_PointBehindPlane_5135;
-            break;
-        default:
-            MON_UNREACHABLE();
-    }
-
-    if (!point_behind_fn(plane, ent.GetCenter()))
+    MON_GET_GAME_FN(point_behind_plane_fn, MonAsm_PointBehindPlane, gv);
+    if (!point_behind_plane_fn(plane, ent.GetCenter()))
         return false;
     if (!check_portal_hole)
         return true;
@@ -147,15 +146,7 @@ void PortalPair::RecalcTpMatrices(PlacementOrder order_)
 {
     MON_ASSERT(blue.gv == orange.gv);
     GameVersion gv = blue.gv;
-
-    decltype(&MonAsm_MatrixInverseTR_5135) mat_inv_fn = nullptr;
-    switch (gv) {
-        case GV_5135:
-            mat_inv_fn = MonAsm_MatrixInverseTR_5135;
-            break;
-        default:
-            MON_UNREACHABLE();
-    }
+    MON_GET_GAME_FN(mat_inv_fn, MonAsm_MatrixInverseTR, gv);
 
     switch (order_) {
         case PlacementOrder::_BLUE_UPTM:

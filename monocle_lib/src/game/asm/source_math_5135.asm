@@ -2,7 +2,7 @@ INCLUDE math_interface.inc
 
 .code
 
-; void AngleMatrix(const QAngle* angles, matrix3x4_t* matrix) : server.dll[0x451670]
+; void __cdecl AngleMatrix(const QAngle* angles, matrix3x4_t* matrix) : server.dll[0x451670]
 _MonAsm_AngleMatrix_5135 PROC PUBLIC
     SUB ESP, 20h
     LEA ECX, [ESP + 8]
@@ -101,7 +101,7 @@ _MonAsm_AngleMatrix_5135 PROC PUBLIC
     RET
 _MonAsm_AngleMatrix_5135 ENDP
 
-; AngleVectors(const QAngle* angles, Vector* f, Vector* r, Vector* u) : server.dll[0x451130]
+; void __cdecl AngleVectors(const QAngle* angles, Vector* f, Vector* r, Vector* u) : server.dll[0x451130]
 _MonAsm_AngleVectors_5135 PROC PUBLIC
     SUB ESP, 20h
     LEA ECX, [ESP + 4]
@@ -224,7 +224,7 @@ no_u:
     RET
 _MonAsm_AngleVectors_5135 ENDP
 
-; MatrixInverseTR(const VMatrix* src, VMatrix* dst) : server.dll[0x4558e0]
+; void __cdecl MatrixInverseTR(const VMatrix* src, VMatrix* dst) : server.dll[0x4558e0]
 _MonAsm_MatrixInverseTR_5135 PROC PUBLIC
     SUB ESP, 18h
     MOV EAX, [ESP + 1Ch]
@@ -281,7 +281,7 @@ _MonAsm_MatrixInverseTR_5135 PROC PUBLIC
     RET
 _MonAsm_MatrixInverseTR_5135 ENDP
 
-; Vector3DMultiply(const VMatrix* src1, const Vector* src2, Vector* dst) : server.dll[0x455780]
+; void __cdecl Vector3DMultiply(const VMatrix* src1, const Vector* src2, Vector* dst) : server.dll[0x455780]
 MonAsmVector3DMultiply_5135 PROC PUBLIC
     MOV EAX, [ESP + 8]
     MOV ECX, [ESP + 0Ch]

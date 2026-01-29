@@ -20,7 +20,7 @@ namespace mon {
 // older versions of the game used x87 ops instead of SSE
 enum GameVersion : uint16_t {
     GV_5135,
-    // GV_9862575,
+    GV_9862575,
 };
 
 constexpr float PORTAL_HALF_WIDTH = 32.f;
