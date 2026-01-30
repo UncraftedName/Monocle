@@ -3,6 +3,9 @@
 #include <utility>
 #include <assert.h>
 
+#define MON_LIB_VERSION_MAJOR 1
+#define MON_LIB_VERSION_MINOR 0
+
 #define MON_F_FMT "{:.9g}"
 #define MON_D_FMT "{:.17g}"
 
@@ -17,5 +20,4 @@
         MON_ASSERT(0);    \
         __assume(0);      \
     } while (0)
-
 #endif
