@@ -3,7 +3,6 @@
 #include "prng.hpp"
 #include "tga.hpp"
 #include "ctpl_stl.h"
-#include "time_scope.hpp"
 #include "vag_search.hpp"
 
 #include <iostream>
@@ -171,14 +170,11 @@ static void GenerateResultsDistributionsToFile()
 }
 
 static void CreateOverlayPortalImage(const mon::PortalPair& pair,
+                                     const mon::TeleportChainParams& paramsTemplate,
                                      const char* file_name,
                                      size_t y_res,
-                                     bool from_blue,
                                      bool rand_nudge = false)
 {
-    TIME_FUNC();
-
-    const mon::Portal& p = from_blue ? pair.blue : pair.orange;
     size_t x_res = (size_t)((double)y_res * mon::PORTAL_HALF_WIDTH / mon::PORTAL_HALF_HEIGHT);
     struct pixel {
         uint8_t b, g, r, a;
@@ -188,26 +184,27 @@ static void CreateOverlayPortalImage(const mon::PortalPair& pair,
     ctpl::thread_pool pool{n_threads ? n_threads : 4};
     for (size_t y = 0; y < y_res; y++) {
 
-        float oy = mon::PORTAL_HALF_HEIGHT * (-1 + 1.f / y_res);
-        float ty = (float)y / (y_res - 1);
-        float my = oy * (1 - 2 * ty);
-        mon::Vector u_off = p.u * my;
-
-        pool.push([x_res, u_off, y, from_blue, &p, &pair, &pixels, rand_nudge](int) -> void {
+        pool.push([x_res, y_res, y, &paramsTemplate, &pixels, rand_nudge](int) -> void {
             small_prng rng{y};
-            mon::TeleportChainParams params;
+            mon::TeleportChainParams params = paramsTemplate;
             mon::TeleportChainResult result;
+
+            const mon::Portal& p =
+                paramsTemplate.first_tp_from_blue ? paramsTemplate.pp->blue : paramsTemplate.pp->orange;
+            // orientation is as if we're looking at the portal
+            float oy = mon::PORTAL_HALF_HEIGHT * (-1 + 1.f / y_res);
+            float ty = 1 - (float)y / (y_res - 1);
+            float my = oy * (1 - 2 * ty);
+            mon::Vector u_off = p.u * my;
+
             for (size_t x = 0; x < x_res; x++) {
                 float rx = rand_nudge ? rng.next_float(-.1f, .1f) : 0.f;
                 float ox = mon::PORTAL_HALF_WIDTH * (-1 + 1.f / x_res);
-                float tx = ((float)x + rx) / (x_res - 1);
+                float tx = 1 - ((float)x + rx) / (x_res - 1);
                 float mx = ox * (1 - 2 * tx);
 
                 mon::Vector r_off = p.r * mx;
-                params.pp = &pair;
-                params.ent = mon::Entity::CreatePlayerFromCenter(p.pos + r_off + u_off, true);
-                params.n_max_teleports = 10;
-                params.first_tp_from_blue = from_blue;
+                params.ent = paramsTemplate.ent.WithNewCenter(p.pos + r_off + u_off);
                 params.record_flags = mon::TCRF_NONE;
 
                 GenerateTeleportChain(params, result);
@@ -230,14 +227,11 @@ static void CreateOverlayPortalImage(const mon::PortalPair& pair,
         });
     }
     pool.stop(true);
-    TIME_SCOPE("TGA_WRITE");
     tga_write(file_name, x_res, y_res, (uint8_t*)pixels.data(), 4, 3);
 }
 
 static void FindVagIn04()
 {
-    TIME_FUNC();
-
     small_prng rng{0};
     mon::TeleportChainParams params;
     mon::TeleportChainResult result;
@@ -284,7 +278,7 @@ static void FindVagIn04()
         printf("%s\n", result.ent.SetPosCmd().c_str());
         const char* file_name = "04_blue.tga";
         printf("Found portal, generating overlay image\n");
-        CreateOverlayPortalImage(pp, file_name, 1000, true);
+        CreateOverlayPortalImage(pp, params, file_name, 1000);
         break;
     }
 }
@@ -323,7 +317,7 @@ static void FindVag18StartCeilCubeRoom()
     }
     (*result).print();
     printf("generating overlay image...\n");
-    CreateOverlayPortalImage(result->pp, __FUNCTION__ ".tga", 1000, true);
+    CreateOverlayPortalImage(result->pp, ss.params, __FUNCTION__ ".tga", 1000);
 }
 
 static void FindComplexChain()
@@ -360,7 +354,7 @@ static void FindComplexChain()
         printf("%s\n", pp.NewLocationCmd().c_str());
         printf("%s\n", result.ent.SetPosCmd().c_str());
         printf("generating overlay image...\n");
-        CreateOverlayPortalImage(pp, "complex_chain.tga", 1000, true);
+        CreateOverlayPortalImage(pp, params, "complex_chain.tga", 1000);
         break;
     }
 }
@@ -432,7 +426,7 @@ static void CreateSpinAnimation()
             };
             char name[32];
             sprintf(name, "spin_anim/ang_%03d.tga", (360 + (i % 360)) % 360);
-            CreateOverlayPortalImage(pp2, name, 350, true);
+            CreateOverlayPortalImage(pp2, params, name, 350);
         }
         break;
     }

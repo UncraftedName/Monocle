@@ -212,6 +212,7 @@ struct VMatrix {
     {
         return m[i];
     }
+
 public:
     // replacements for operator*
     VMatrix Multiply(const VMatrix& vm, GameVersion gv) const;
@@ -277,6 +278,13 @@ public:
     static Entity CreatePlayerFromOrigin(Vector origin, bool crouched);
     static Entity CreatePlayerFromCenter(Vector center, bool crouched);
     static Entity CreateBall(Vector center, float radius);
+
+    Entity WithNewCenter(Vector newCenter) const
+    {
+        if (is_player)
+            return CreatePlayerFromCenter(newCenter, player.crouched);
+        return CreateBall(newCenter, ball.radius);
+    }
 
     Vector GetWorldMins() const;
     Vector GetWorldMaxs() const;
