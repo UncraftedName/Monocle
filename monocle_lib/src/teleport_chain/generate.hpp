@@ -58,6 +58,10 @@ struct TeleportChainParams {
     bool project_to_first_portal_plane = true;
     // which portal is the first teleport from?
     bool first_tp_from_blue;
+    // does the entry portal already own the entity or did the entity teleport from elsewhere?
+    bool ent_owned_by_entry_portal = true;
+    // if the player were teleported to the origin, would there be anything there? (e.g. true in 02/04, false in 09)
+    bool map_origin_empty = false;
     // TeleportChainRecordFlags
     uint32_t record_flags = TCRF_RECORD_ENTITY | TCRF_RECORD_TP_DIRS;
     // limit the maximum number of teleports that the chain can do
@@ -66,6 +70,18 @@ struct TeleportChainParams {
     // this inits everything with sensible defaults, but every field above is public and can be changed
     TeleportChainParams(const PortalPair* pp, Entity ent);
     TeleportChainParams() : TeleportChainParams(nullptr, Entity{}) {}
+
+    const Portal& EntryPortal() const
+    {
+        MON_ASSERT(!!pp);
+        return first_tp_from_blue ? pp->blue : pp->orange;
+    }
+
+    const Portal& ExitPortal() const
+    {
+        MON_ASSERT(!!pp);
+        return first_tp_from_blue ? pp->orange : pp->blue;
+    }
 };
 
 // this struct can (and should) be reused when generating multiple chains

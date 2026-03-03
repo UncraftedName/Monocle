@@ -24,7 +24,10 @@ struct TeleportChainInternalState {
     queue_type tp_queue;
     // total number of nulls queued so far, only for debugging
     queue_entry n_queued_nulls;
-    int touch_scope_depth; // CPortalTouchScope::m_nDepth, not fully implemented
+    // CPortalTouchScope::m_nDepth, not fully implemented
+    int touch_scope_depth;
+    // m_PortalSimulator.OwnsEntity, I assume that only one simulator can own each entity
+    portal_type owning_portal;
 };
 
 } // namespace mon

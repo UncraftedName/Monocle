@@ -31,13 +31,7 @@ TeleportChainParams::TeleportChainParams(const PortalPair* pp, Entity ent)
 * Note: CPortalSimulator::ReleaseOwnershipOfEntity may call RecheckEntityCollision which may be
 * added to the queue as well. As far as I can tell this is a noop and can be ignored for the
 * purpose of chain generation. If RecheckEntityCollision is added to the queue, it will just be
-* popped off an executed until the next teleport or null. That also means that any code that:
-* 
-* - keeps track of which portal owns the entity (CPortalSimulator::OwnsEntity)
-* - checks how many children the entity has (CPortalSimulator::ReleaseOwnershipOfEntity)
-* - relies on the map origin being inbounds (CProp_Portal::Touch after SharedEnvironmentCheck)
-* 
-* is irrelevant.
+* popped off an executed until the next teleport or null.
 */
 struct GenerateTeleportChainImpl {
 
@@ -58,6 +52,11 @@ struct GenerateTeleportChainImpl {
         st.tp_queue.clear();
         st.n_queued_nulls = 0;
         st.touch_scope_depth = 0;
+        st.owning_portal = usrParams.first_tp_from_blue ? INTERN::FUNC_TP_BLUE : INTERN::FUNC_TP_ORANGE;
+        if (usrParams.ent_owned_by_entry_portal)
+            st.owning_portal = usrParams.first_tp_from_blue ? INTERN::FUNC_TP_BLUE : INTERN::FUNC_TP_ORANGE;
+        else
+            st.owning_portal = INTERN::PORTAL_NONE;
 
         // clear result
 
@@ -72,24 +71,30 @@ struct GenerateTeleportChainImpl {
             result.graphviz_flow_control.Clear();
     }
 
+#define MON_CHECK_VALID_PORTAL_TYPE(p) static_assert(p == INTERN::FUNC_TP_BLUE || p == INTERN::FUNC_TP_ORANGE);
+
     template <INTERN::portal_type PORTAL>
     static constexpr INTERN::portal_type OppositePortalType()
     {
         if constexpr (PORTAL == INTERN::FUNC_TP_BLUE)
             return INTERN::FUNC_TP_ORANGE;
-        else
+        else if constexpr (PORTAL == INTERN::FUNC_TP_ORANGE)
             return INTERN::FUNC_TP_BLUE;
+        else
+            return INTERN::PORTAL_NONE;
     }
 
     template <INTERN::portal_type PORTAL>
     inline bool PortalIsPrimary()
     {
+        MON_CHECK_VALID_PORTAL_TYPE(PORTAL);
         return usrParams.first_tp_from_blue == (PORTAL == INTERN::FUNC_TP_BLUE);
     }
 
     template <INTERN::portal_type PORTAL>
     inline const Portal& GetPortal()
     {
+        MON_CHECK_VALID_PORTAL_TYPE(PORTAL);
         return PORTAL == INTERN::FUNC_TP_BLUE ? usrParams.pp->blue : usrParams.pp->orange;
     }
 
@@ -140,12 +145,37 @@ struct GenerateTeleportChainImpl {
     }
 
     template <INTERN::portal_type PORTAL>
+    bool SharedEnvironmentCheck()
+    {
+        MON_CHECK_VALID_PORTAL_TYPE(PORTAL);
+        if (st.owning_portal != OppositePortalType<PORTAL>())
+            return true;
+        Vector ent_pos = result.ent.GetCenter();
+        // rough distance check, not meant to be float accurate
+        return GetPortal<PORTAL>().pos.DistToSqr(ent_pos) <
+               GetPortal<OppositePortalType<PORTAL>()>().pos.DistToSqr(ent_pos);
+    }
+
+    template <INTERN::portal_type PORTAL>
     void PortalTouchEntity()
     {
+        MON_CHECK_VALID_PORTAL_TYPE(PORTAL);
         if (result.max_tps_exceeded)
             return;
         ++st.touch_scope_depth;
-        if (GetPortal<PORTAL>().ShouldTeleport(result.ent, true))
+
+        // logic in CProp_Portal::Touch
+        if (st.owning_portal != PORTAL) {
+            if (SharedEnvironmentCheck<PORTAL>()) {
+                // this in front check is not float accurate, but hopefully it's good enough for most use cases
+                bool in_front = !GetPortal<PORTAL>().ShouldTeleport(result.ent, false);
+                bool stuck_player = result.ent.is_player && !usrParams.map_origin_empty;
+                if (in_front || stuck_player)
+                    st.owning_portal = PORTAL;
+            }
+        }
+
+        if (st.owning_portal == PORTAL && GetPortal<PORTAL>().ShouldTeleport(result.ent, true))
             TeleportEntity<PORTAL>();
         if (--st.touch_scope_depth == 0)
             CallQueued();
@@ -160,6 +190,7 @@ struct GenerateTeleportChainImpl {
     template <INTERN::portal_type PORTAL>
     void TeleportEntity()
     {
+        MON_CHECK_VALID_PORTAL_TYPE(PORTAL);
         if (st.touch_scope_depth > 0) {
             PushToQueue(PORTAL);
             return;
@@ -200,6 +231,7 @@ struct GenerateTeleportChainImpl {
         if (usrParams.record_flags & TCRF_RECORD_GRAPHVIZ_FLOW_CONTROL)
             result.graphviz_flow_control.PostTeleportTransform(PORTAL == INTERN::FUNC_TP_BLUE, gv_plane_side);
 
+        st.owning_portal = OppositePortalType<PORTAL>();
         EntityTouchPortal();
         PortalTouchEntity<OppositePortalType<PORTAL>()>();
         PortalTouchEntity<OppositePortalType<PORTAL>()>();
