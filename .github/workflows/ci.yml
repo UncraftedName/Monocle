@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        config: [Debug, Release]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake --preset base
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.config }}
+
+      - name: Test
+        run: ctest --test-dir out/build/base -C ${{ matrix.config }} -V --no-tests=error

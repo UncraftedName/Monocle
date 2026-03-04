@@ -6,8 +6,8 @@ set(CMAKE_CXX_STANDARD 20)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 
+enable_testing()
+
 add_subdirectory(monocle_lib)
 add_subdirectory(catch)
 add_subdirectory(monocle)
-
-enable_testing()
