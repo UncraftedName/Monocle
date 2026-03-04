@@ -533,7 +533,7 @@ static void FindVagIn09EleTop()
         .entry_pos_search = mon::SEPF_LOWER,
         .valid_placement_orders{
             mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
-            mon::PlacementOrder::AFTER_LOAD,
+            mon::PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION,
         },
         .tp_from_blue = false,
         .tp_player = true,
@@ -571,7 +571,7 @@ static void FindVagIn09EleBottom()
         .entry_pos_search = mon::SEPF_LOWER,
         .valid_placement_orders{
             mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
-            mon::PlacementOrder::AFTER_LOAD,
+            mon::PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION,
         },
         .tp_from_blue = false,
         .tp_player = true,
@@ -600,7 +600,6 @@ static void FindVagIn11()
         .valid_placement_orders{
             mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
             mon::PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION,
-            mon::PlacementOrder::AFTER_LOAD,
         },
         .tp_from_blue = false,
         .tp_player = true,
@@ -632,7 +631,6 @@ static void FindKnownVagIn11()
         .valid_placement_orders{
             mon::PlacementOrder::ORANGE_OPEN_BLUE_NEW_LOCATION,
             mon::PlacementOrder::BLUE_OPEN_ORANGE_NEW_LOCATION,
-            mon::PlacementOrder::AFTER_LOAD,
         },
         .tp_from_blue = false,
         .tp_player = true,

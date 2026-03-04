@@ -333,13 +333,7 @@ struct Portal {
 
 /*
 * When a portal is placed, it calculates its teleport matrix "from scratch" and sets the other
-* portal's matrix to the inverse. When portals are loaded in via a save, they both calculate their
-* matrix "from scratch". Of course due to floating point shenanigans, these 3 cases *may* change
-* the exact values in the teleport matrices. At the end of the day, those are the only 3 cases:
-* 
-* - blue is last placed portal
-* - orange is last placed portal
-* - portals loaded in from save
+* portal's matrix to the inverse.
 * 
 * The relevant game functions for setting these matrices is ridiculously obtuse - not math-wise,
 * but because the functions are sometimes called multiple times which overwrites the old values.
@@ -354,9 +348,6 @@ enum class PlacementOrder {
     */
     _BLUE_UPTM,
     _ORANGE_UPTM,
-
-    // Teleport matrices are calculated in UpdateLinkMatrix; both matrices are calculated the same way.
-    _ULM,
 
     /*
     * Both portals are open, one of them was moved (either with portal gun or newlocation).
@@ -415,15 +406,15 @@ enum class PlacementOrder {
     ORANGE_WAS_CLOSED_BLUE_OPENED = ORANGE_WAS_CLOSED_BLUE_CREATED,
     BLUE_WAS_CLOSED_ORANGE_OPENED = BLUE_WAS_CLOSED_ORANGE_CREATED,
 
-    AFTER_LOAD = _ULM,
+    AFTER_LOAD_BLUE_HAS_HIGHER_INDEX = _BLUE_UPTM,
+    AFTER_LOAD_ORANGE_HAS_HIGHER_INDEX = _ORANGE_UPTM,
 
-    COUNT,
+    COUNT = 2,
 };
 
 static std::array<const char*, (int)PlacementOrder::COUNT> PlacementOrderStrs{
     "BLUE_UpdatePortalTransformationMatrix",
     "ORANGE_UpdatePortalTransformationMatrix",
-    "UpdateLinkMatrix",
 };
 
 struct PortalPair {

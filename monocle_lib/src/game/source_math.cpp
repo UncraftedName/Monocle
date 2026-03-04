@@ -148,52 +148,26 @@ void PortalPair::RecalcTpMatrices(PlacementOrder order_)
     GameVersion gv = blue.gv;
     MON_GET_GAME_FN(mat_inv_fn, MonAsm_MatrixInverseTR, gv);
 
-    switch (order_) {
-        case PlacementOrder::_BLUE_UPTM:
-        case PlacementOrder::_ORANGE_UPTM: {
-            bool ob = order_ == PlacementOrder::_BLUE_UPTM;
-            auto& p1_mat = ob ? blue.mat : orange.mat;
-            auto& p2_mat = ob ? orange.mat : blue.mat;
-            auto& p1_to_p2 = ob ? b_to_o : o_to_b;
-            auto& p2_to_p1 = ob ? o_to_b : b_to_o;
-
-            // CProp_Portal_Shared::UpdatePortalTransformationMatrix
-            VMatrix matPortal1ToWorldInv, matPortal2ToWorld, matRotation;
-            mat_inv_fn(*reinterpret_cast<const VMatrix*>(&p1_mat), matPortal1ToWorldInv);
-            MatrixSetIdentity(matRotation);
-            matRotation[0][0] = -1.0f;
-            matRotation[1][1] = -1.0f;
-            memcpy(&matPortal2ToWorld, &p2_mat, sizeof matrix3x4_t);
-            matPortal2ToWorld[3][0] = matPortal2ToWorld[3][1] = matPortal2ToWorld[3][2] = 0.0f;
-            matPortal2ToWorld[3][3] = 1.0f;
-            p1_to_p2 = matPortal2ToWorld.Multiply(matRotation, gv).Multiply(matPortal1ToWorldInv, gv);
-            // the bit right after in CProp_Portal::UpdatePortalTeleportMatrix
-            mat_inv_fn(p1_to_p2, p2_to_p1);
-            break;
-        }
-        case PlacementOrder::_ULM: {
-            // CPortalSimulator::UpdateLinkMatrix for both portals
-            VMatrix blue_to_world{blue.f, -blue.r, blue.u, blue.pos};
-            VMatrix orange_to_world{orange.f, -orange.r, orange.u, orange.pos};
-            for (int i = 0; i < 2; i++) {
-                auto& p_to_world = i ? blue_to_world : orange_to_world;
-                auto& other_to_world = i ? orange_to_world : blue_to_world;
-                auto& p_to_other = i ? b_to_o : o_to_b;
-
-                VMatrix matLocalToWorldInv, matRotation;
-                mat_inv_fn(p_to_world, matLocalToWorldInv);
-                MatrixSetIdentity(matRotation);
-                matRotation[0][0] = -1.0f;
-                matRotation[1][1] = -1.0f;
-                p_to_other = other_to_world.Multiply(matRotation, gv).Multiply(matLocalToWorldInv, gv);
-            }
-            break;
-        }
-        case PlacementOrder::COUNT:
-        default:
-            MON_UNREACHABLE();
-    }
     order = order_;
+
+    bool ob = order_ == PlacementOrder::_BLUE_UPTM;
+    auto& p1_mat = ob ? blue.mat : orange.mat;
+    auto& p2_mat = ob ? orange.mat : blue.mat;
+    auto& p1_to_p2 = ob ? b_to_o : o_to_b;
+    auto& p2_to_p1 = ob ? o_to_b : b_to_o;
+
+    // CProp_Portal_Shared::UpdatePortalTransformationMatrix
+    VMatrix matPortal1ToWorldInv, matPortal2ToWorld, matRotation;
+    mat_inv_fn(*reinterpret_cast<const VMatrix*>(&p1_mat), matPortal1ToWorldInv);
+    MatrixSetIdentity(matRotation);
+    matRotation[0][0] = -1.0f;
+    matRotation[1][1] = -1.0f;
+    memcpy(&matPortal2ToWorld, &p2_mat, sizeof matrix3x4_t);
+    matPortal2ToWorld[3][0] = matPortal2ToWorld[3][1] = matPortal2ToWorld[3][2] = 0.0f;
+    matPortal2ToWorld[3][3] = 1.0f;
+    p1_to_p2 = matPortal2ToWorld.Multiply(matRotation, gv).Multiply(matPortal1ToWorldInv, gv);
+    // the bit right after in CProp_Portal::UpdatePortalTeleportMatrix
+    mat_inv_fn(p1_to_p2, p2_to_p1);
 }
 
 Entity PortalPair::Teleport(const Entity& ent, bool tp_from_blue) const
