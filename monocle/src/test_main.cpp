@@ -1,4 +1,8 @@
+#pragma warning(push)
+#pragma warning(disable : 4324)
 #include "catch_amalgamated.hpp"
+#pragma warning(pop)
+
 #include "game/source_math.hpp"
 #include "game/source_math_double.hpp"
 #include "teleport_chain/generate.hpp"
@@ -43,6 +47,7 @@ int main(int argc, char* argv[])
     int ret = session.run(argc, argv);
     auto td = duration_cast<duration<double>>(high_resolution_clock::now() - t);
     printf("Tests completed after %.3fs\n", td.count());
+    return ret;
 }
 
 /*
@@ -491,15 +496,15 @@ TEST_CASE("Teleport chain results in VAG")
 
     mon::Vector target_vag_pos = pp.Teleport(params.ent.GetCenter(), true);
 
-    const int n_teleports_success = 3;
+    const size_t n_teleports_success = 3;
 
-    for (int n_max_teleports = 0; n_max_teleports < n_teleports_success + 2; n_max_teleports++) {
+    for (size_t n_max_teleports = 0; n_max_teleports < n_teleports_success + 2; n_max_teleports++) {
         DYNAMIC_SECTION("teleport limit is " << n_max_teleports)
         {
             params.n_max_teleports = n_max_teleports;
             mon::GenerateTeleportChain(params, result);
 
-            int n_expected_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
+            size_t n_expected_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
 
             REQUIRE(result.total_n_teleports == n_expected_teleports);
             REQUIRE(result.max_tps_exceeded == (n_expected_teleports < n_teleports_success));
@@ -571,14 +576,14 @@ TEST_CASE("Teleport chain results in 5 teleports (cum=1)")
 
     mon::Vector target_vag_pos = pp.Teleport(params.ent.GetCenter(), true);
 
-    const int n_teleports_success = 5;
+    const size_t n_teleports_success = 5;
 
-    for (int n_max_teleports = 0; n_max_teleports < n_teleports_success + 2; n_max_teleports++) {
+    for (size_t n_max_teleports = 0; n_max_teleports < n_teleports_success + 2; n_max_teleports++) {
         DYNAMIC_SECTION("teleport limit is " << n_max_teleports)
         {
             params.n_max_teleports = n_max_teleports;
             mon::GenerateTeleportChain(params, result);
-            int n_expected_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
+            size_t n_expected_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
 
             REQUIRE(result.total_n_teleports == n_expected_teleports);
             REQUIRE(result.max_tps_exceeded == (n_expected_teleports < n_teleports_success));
@@ -667,14 +672,14 @@ TEST_CASE("Teleport chain results in 6 teleports (cum=-2)")
     */
     mon::Entity target_ent = mon::Entity::CreatePlayerFromOrigin({1050.953125f, 539.331055f, 563.865845f}, true);
 
-    const int n_teleports_success = 6;
+    const size_t n_teleports_success = 6;
 
-    for (int n_max_teleports = 0; n_max_teleports < n_teleports_success + 2; n_max_teleports++) {
+    for (size_t n_max_teleports = 0; n_max_teleports < n_teleports_success + 2; n_max_teleports++) {
         DYNAMIC_SECTION("teleport limit is " << n_max_teleports)
         {
             params.n_max_teleports = n_max_teleports;
             mon::GenerateTeleportChain(params, result);
-            int n_expected_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
+            size_t n_expected_teleports = n_max_teleports > n_teleports_success ? n_teleports_success : n_max_teleports;
 
             REQUIRE(result.total_n_teleports == n_expected_teleports);
             REQUIRE(result.max_tps_exceeded == (n_expected_teleports < n_teleports_success));
@@ -813,7 +818,7 @@ TEST_CASE("E01 AAG")
 
     mon::TeleportChainParams params{
         &pp,
-        mon::Entity::CreatePlayerFromOrigin({-136.239883, 726.482483, -240.416977}, false),
+        mon::Entity::CreatePlayerFromOrigin({-136.239883f, 726.482483f, -240.416977f}, false),
     };
     params.project_to_first_portal_plane = false;
 

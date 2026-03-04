@@ -4,10 +4,6 @@ project(monocle
 )
 set(CMAKE_CXX_STANDARD 20)
 
-if (MSVC)
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /Wall /wd5045")
-endif()
-
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 
 add_subdirectory(monocle_lib)

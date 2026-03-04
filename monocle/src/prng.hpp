@@ -46,17 +46,17 @@ public:
     }
 
     // [a, b)
-    int next_int(int a, int b)
+    int next_int(int low, int high)
     {
-        MON_ASSERT(b > a);
-        return (*this)() % (value_type)(b - a) + a;
+        MON_ASSERT(high > low);
+        return (*this)() % (value_type)(high - low) + low;
     }
 
     // [a, b]
-    float next_float(float a, float b)
+    float next_float(float low, float high)
     {
-        MON_ASSERT(b > a);
-        return (*this)() / static_cast<float>(UINT32_MAX) * (b - a) + a;
+        MON_ASSERT(high > low);
+        return (*this)() / static_cast<float>(UINT32_MAX) * (high - low) + low;
     }
 
     template <typename Container>

@@ -33,8 +33,8 @@ static std::array<const char*, PYT_COUNT> PITCH_YAW_STRS{
 
 static mon::Vector RandomPos(small_prng& rng, size_t oct_bits, size_t dist_scale)
 {
-    float a = 1 << dist_scale;
-    float b = 1 << (dist_scale + 1);
+    float a = (float)(1 << dist_scale);
+    float b = (float)(1 << (dist_scale + 1));
     return {
         rng.next_float(a, b) * (oct_bits & 1 ? 1.f : -1.f),
         rng.next_float(a, b) * (oct_bits & 2 ? 1.f : -1.f),
@@ -116,8 +116,6 @@ static void GenerateResultsDistributionsToFile()
 
     for (const auto& [blue_opts, orange_opts, misc_opts] : all_opts) {
 
-        auto bp = std::get<0>(blue_opts);
-
         int results[RESULT_COUNT]{};
 
         for (int i = 0; i < n_runs_per_combination; i++) {
@@ -169,8 +167,7 @@ static void GenerateResultsDistributionsToFile()
     of << "\n]\n}\n";
 }
 
-static void CreateOverlayPortalImage(const mon::PortalPair& pair,
-                                     const mon::TeleportChainParams& paramsTemplate,
+static void CreateOverlayPortalImage(const mon::TeleportChainParams& paramsTemplate,
                                      const char* file_name,
                                      size_t y_res,
                                      bool rand_nudge = false)
@@ -189,8 +186,7 @@ static void CreateOverlayPortalImage(const mon::PortalPair& pair,
             mon::TeleportChainParams params = paramsTemplate;
             mon::TeleportChainResult result;
 
-            const mon::Portal& p =
-                paramsTemplate.first_tp_from_blue ? paramsTemplate.pp->blue : paramsTemplate.pp->orange;
+            const mon::Portal& p = paramsTemplate.EntryPortal();
             // orientation is as if we're looking at the portal
             float oy = mon::PORTAL_HALF_HEIGHT * (-1 + 1.f / y_res);
             float ty = 1 - (float)y / (y_res - 1);
@@ -218,9 +214,9 @@ static void CreateOverlayPortalImage(const mon::PortalPair& pair,
                 else if (result.cum_teleports == 1)
                     pix.r = pix.g = pix.b = 255;
                 else if (result.cum_teleports < 0 && result.cum_teleports >= -3)
-                    pix.r = 85 * -result.cum_teleports;
+                    pix.r = (uint8_t)(85 * -result.cum_teleports);
                 else if (result.cum_teleports > 1 && result.cum_teleports <= 4)
-                    pix.g = 85 * (result.cum_teleports - 1);
+                    pix.g = (uint8_t)(85 * (result.cum_teleports - 1));
                 else
                     pix.b = 255;
             }
@@ -248,9 +244,9 @@ static void FindVagIn04()
 
     for (int i = 0; i < 100000; i++) {
         mon::PortalPair pp{
-            {rng.next_float(xmin, xmax), rng.next_float(ymin, ymax), 255.96877},
+            {rng.next_float(xmin, xmax), rng.next_float(ymin, ymax), 255.96877f},
             {90, rng.next_float(yaw_min, yaw_max), 0},
-            {-448, 0.03125, 54.9502},
+            {-448.f, 0.03125f, 54.9502f},
             {0, 90, 0},
             mon::PlacementOrder::BLUE_WAS_CLOSED_ORANGE_OPENED,
             mon::GV_5135,
@@ -278,7 +274,7 @@ static void FindVagIn04()
         printf("%s\n", result.ent.SetPosCmd().c_str());
         const char* file_name = "04_blue.tga";
         printf("Found portal, generating overlay image\n");
-        CreateOverlayPortalImage(pp, params, file_name, 1000);
+        CreateOverlayPortalImage(params, file_name, 1000);
         break;
     }
 }
@@ -317,7 +313,7 @@ static void FindVag18StartCeilCubeRoom()
     }
     (*result).print();
     printf("generating overlay image...\n");
-    CreateOverlayPortalImage(result->pp, ss.params, __FUNCTION__ ".tga", 1000);
+    CreateOverlayPortalImage(ss.params, __FUNCTION__ ".tga", 1000);
 }
 
 static void FindComplexChain()
@@ -354,15 +350,13 @@ static void FindComplexChain()
         printf("%s\n", pp.NewLocationCmd().c_str());
         printf("%s\n", result.ent.SetPosCmd().c_str());
         printf("generating overlay image...\n");
-        CreateOverlayPortalImage(pp, params, "complex_chain.tga", 1000);
+        CreateOverlayPortalImage(params, "complex_chain.tga", 1000);
         break;
     }
 }
 
 static void DebugInfinite09Chain()
 {
-    (void)freopen("vs_2022_infinite.txt", "w", stdout);
-
     mon::PortalPair pp{
         {255.96875f, -161.01295f, 201.96875f},
         {-0.f, 180.f, 0.f},
@@ -415,18 +409,19 @@ static void CreateSpinAnimation()
 
         if (result.max_tps_exceeded || result.cum_teleports != -1)
             continue;
-        for (int i = -180; i < 180; i++) {
+        for (int j = -180; j < 180; j++) {
             mon::PortalPair pp2{
                 pp.blue.pos,
-                {pp.blue.ang.x, (float)i, 0},
+                {pp.blue.ang.x, (float)j, 0},
                 pp.orange.pos,
                 pp.orange.ang,
                 pp.order,
                 mon::GV_5135,
             };
+            params.pp = &pp2;
             char name[32];
-            sprintf(name, "spin_anim/ang_%03d.tga", (360 + (i % 360)) % 360);
-            CreateOverlayPortalImage(pp2, params, name, 350);
+            sprintf_s(name, "spin_anim/ang_%03d.tga", (360 + (j % 360)) % 360);
+            CreateOverlayPortalImage(params, name, 350);
         }
         break;
     }

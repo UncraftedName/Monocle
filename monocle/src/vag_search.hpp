@@ -79,6 +79,7 @@ struct SearchPortal {
                 ang = {90.f, rng.next_float(-180.f, 180.f), 0.f};
                 break;
             default:
+                lock_axis = -1;
                 MON_ASSERT(0);
         }
         float lock_ax_val = rng.next_elem(lock_opts);
