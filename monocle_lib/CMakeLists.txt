@@ -19,10 +19,11 @@ target_compile_options(monocle_lib PRIVATE
 	$<$<COMPILE_LANGUAGE:C,CXX>:/W4;/wd4820>
 )
 
-target_include_directories(monocle_lib PRIVATE
+target_include_directories(monocle_lib PUBLIC
 	src
 )
 
 target_link_options(monocle_lib PUBLIC
 	/NATVIS:${CMAKE_CURRENT_LIST_DIR}/dbg.natvis
+	/SAFESEH:NO
 )
