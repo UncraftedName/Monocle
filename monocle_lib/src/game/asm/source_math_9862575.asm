@@ -556,18 +556,11 @@ _MonAsm_AngleVectors_9862575 ENDP
     ADDSS XMM1, XMM0
     ADDSS XMM1, dword ptr [ECX + 2Ch]
     MOVSS dword ptr [EAX + Vector.z], XMM1
-
-    ; xm0 = m[1][3]
-    ; xm0 *= xm6
-    ; v.y = xm2
-    ; xm1 += xm0
-    ; xm1 += m[2][3]
-    ; v.z = xm1
-
     RET 8
 @MonAsm_MatrixMulVector_9862575@16 ENDP
 
-; void __cdecl MonAsm_PosAndNormToPlane_5135(const mon::Vector& pos, const mon::Vector& dir, mon::VPlane& out) : server.dll[0x44e30a]
+; void __cdecl MonAsm_PosAndNormToPlane(const mon::Vector& pos, const mon::Vector& dir, mon::VPlane& out) : server.dll[0x44e30a]
+; in CPortalSimulator::MoveTo
 _MonAsm_PosAndNormToPlane_9862575 PROC PUBLIC
     MOV ECX, [ESP + 12] ; ecx : plane
     MOV EDX, [ESP + 8]  ; edx : normal
@@ -592,7 +585,8 @@ _MonAsm_PosAndNormToPlane_9862575 PROC PUBLIC
     RET
 _MonAsm_PosAndNormToPlane_9862575 ENDP
 
-; bool __cdecl MonAsm_PointBehindPlane_5135(const mon::VPlane& plane, const mon::Vector& pt) : server.dll[0x455b2c]
+; bool __cdecl MonAsm_PointBehindPlane(const mon::VPlane& plane, const mon::Vector& pt) : server.dll[0x455b2c]
+; in CProp_Portal::ShouldTeleportTouchingEntity
 _MonAsm_PointBehindPlane_9862575 PROC PUBLIC
     MOV ECX, [ESP + 4] ; ecx : plane
     MOV EDX, [ESP + 8] ; edx : point
