@@ -1,5 +1,7 @@
 #include "teleport_chain/generate.hpp"
 
+#include <format>
+
 namespace mon {
 
 std::ostream& TeleportChainResult::MiniDump(std::ostream& os, const TeleportChainParams& params) const

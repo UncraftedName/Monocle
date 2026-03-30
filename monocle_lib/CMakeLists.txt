@@ -13,8 +13,6 @@ set(SRC_FILES
 
 add_library(monocle_lib STATIC ${SRC_FILES})
 
-target_compile_features(monocle_lib PUBLIC cxx_std_23)
-
 target_compile_options(monocle_lib PRIVATE
 	$<$<COMPILE_LANGUAGE:C,CXX>:/W4;/wd4820>
 )
