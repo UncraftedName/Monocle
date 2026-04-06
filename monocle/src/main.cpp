@@ -73,7 +73,7 @@ static mon::QAngle RandomAng(small_prng& rng, PITCH_YAW_TYPE type, bool has_roll
         case PYT_COUNT:
         default:
             p = y = 0.f;
-            MON_ASSERT(0);
+            MON_UNREACHABLE();
     }
     return {p, y, has_roll ? rng.next_float(-180.f, 180.f) : 0.f};
 }

@@ -23,9 +23,9 @@ enum GameVersion : uint16_t {
     GV_9862575,
 };
 
-constexpr float PORTAL_HALF_WIDTH = 32.f;
-constexpr float PORTAL_HALF_HEIGHT = 54.f;
-constexpr float PORTAL_HOLE_DEPTH = 500.f;
+inline constexpr float PORTAL_HALF_WIDTH = 32.f;
+inline constexpr float PORTAL_HALF_HEIGHT = 54.f;
+inline constexpr float PORTAL_HOLE_DEPTH = 500.f;
 
 // sets FPU flags to what the game uses, setup before using any monocle code
 class MonocleFloatingPointScope {
@@ -139,6 +139,8 @@ struct Vector {
     }
 
     std::string ToString(std::string_view delim = ", ") const;
+
+    MON_VECTOR_CLASS_EXTRA;
 };
 
 struct QAngle {
@@ -160,6 +162,8 @@ struct QAngle {
     {
         return x == o.x && y == o.y && z == o.z;
     }
+
+	MON_QANGLE_CLASS_EXTRA;
 };
 
 struct matrix3x4_t {
@@ -184,6 +188,8 @@ struct matrix3x4_t {
     }
 
     std::string DebugToString() const;
+
+	MON_MATRIX3X4_CLASS_EXTRA;
 };
 
 struct VMatrix {
@@ -213,12 +219,13 @@ struct VMatrix {
         return m[i];
     }
 
-public:
     // replacements for operator*
     VMatrix Multiply(const VMatrix& vm, GameVersion gv) const;
     Vector Multiply(const Vector& v, GameVersion gv) const;
 
     std::string DebugToString() const;
+
+	MON_VMATRIX_CLASS_EXTRA;
 };
 
 struct VPlane {
@@ -239,15 +246,17 @@ struct VPlane {
     }
 
     std::string ToString() const;
+
+	MON_VPLANE_CLASS_EXTRA;
 };
 
 // g_DefaultViewVectors
-static constexpr Vector PLAYER_CROUCH_MINS{-16.f, -16.f, 0.f};
-static constexpr Vector PLAYER_CROUCH_MAXS{16.f, 16.f, 36.f};
-static constexpr Vector PLAYER_CROUCH_HALF = (PLAYER_CROUCH_MINS + PLAYER_CROUCH_MAXS) * .5f;
-static constexpr Vector PLAYER_STAND_MINS{-16.f, -16.f, 0.f};
-static constexpr Vector PLAYER_STAND_MAXS{16.f, 16.f, 72.f};
-static constexpr Vector PLAYER_STAND_HALF = (PLAYER_STAND_MINS + PLAYER_STAND_MAXS) * .5f;
+inline constexpr Vector PLAYER_CROUCH_MINS{-16.f, -16.f, 0.f};
+inline constexpr Vector PLAYER_CROUCH_MAXS{16.f, 16.f, 36.f};
+inline constexpr Vector PLAYER_CROUCH_HALF = (PLAYER_CROUCH_MINS + PLAYER_CROUCH_MAXS) * .5f;
+inline constexpr Vector PLAYER_STAND_MINS{-16.f, -16.f, 0.f};
+inline constexpr Vector PLAYER_STAND_MAXS{16.f, 16.f, 72.f};
+inline constexpr Vector PLAYER_STAND_HALF = (PLAYER_STAND_MINS + PLAYER_STAND_MAXS) * .5f;
 
 struct Entity {
 
@@ -267,7 +276,6 @@ struct Entity {
 
     bool is_player;
 
-public:
 #ifdef DEBUG_NAN_CTORS
     Entity() : is_player(true), player(Vector{}, true) {}
 #else
@@ -297,6 +305,8 @@ public:
     }
 
     std::string SetPosCmd() const;
+
+	MON_ENTITY_CLASS_EXTRA;
 };
 
 struct plane_bits {
@@ -329,6 +339,8 @@ struct Portal {
 
     std::string NewLocationCmd(std::string_view portal_name, bool escape_quotes = false) const;
     std::string DebugToString(std::string_view portal_name) const;
+
+	MON_PORTAL_CLASS_EXTRA;
 };
 
 /*
@@ -412,7 +424,7 @@ enum class PlacementOrder {
     COUNT = 2,
 };
 
-static std::array<const char*, (int)PlacementOrder::COUNT> PlacementOrderStrs{
+inline std::array<const char*, (int)PlacementOrder::COUNT> PlacementOrderStrs{
     "BLUE_UpdatePortalTransformationMatrix",
     "ORANGE_UpdatePortalTransformationMatrix",
 };
@@ -447,6 +459,8 @@ struct PortalPair {
 
     std::string NewLocationCmd(std::string_view delim = "\n", bool escape_quotes = false) const;
     std::string DebugToString() const;
+
+	MON_PORTAL_PAIR_CLASS_EXTRA;
 };
 
 enum PlaneSideResult {

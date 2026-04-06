@@ -80,7 +80,7 @@ struct SearchPortal {
                 break;
             default:
                 lock_axis = -1;
-                MON_ASSERT(0);
+                MON_UNREACHABLE();
         }
         float lock_ax_val = rng.next_elem(lock_opts);
         const AABB& pos_space = rng.next_elem(pos_spaces);
