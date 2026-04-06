@@ -1,11 +1,11 @@
 #pragma once
 
-#ifdef MON_CFG_INCLUDE
-#include MON_CFG_INCLUDE
+#ifdef MON_CFG_INCLUDE_EXTRA
+#include MON_CFG_INCLUDE_EXTRA
 #endif
 
 #define MON_LIB_VERSION_MAJOR 1
-#define MON_LIB_VERSION_MINOR 0
+#define MON_LIB_VERSION_MINOR 1
 
 #ifndef MON_F_FMT
 #define MON_F_FMT "{:.9g}"
@@ -35,4 +35,42 @@
         __assume(0);      \
     } while (0)
 #endif
+#endif
+
+/*
+* These will be inlined in the respective classes - can be used for implicit conversions to/from
+* your types. The easiest way to handle these is to create a custom header different from
+* MON_CFG_INCLUDE_EXTRA and include it before any monocle headers.
+*/
+
+#ifndef MON_VECTOR_CLASS_EXTRA
+#define MON_VECTOR_CLASS_EXTRA
+#endif
+
+#ifndef MON_QANGLE_CLASS_EXTRA
+#define MON_QANGLE_CLASS_EXTRA
+#endif
+
+#ifndef MON_MATRIX3X4_CLASS_EXTRA
+#define MON_MATRIX3X4_CLASS_EXTRA
+#endif
+
+#ifndef MON_VMATRIX_CLASS_EXTRA
+#define MON_VMATRIX_CLASS_EXTRA
+#endif
+
+#ifndef MON_VPLANE_CLASS_EXTRA
+#define MON_VPLANE_CLASS_EXTRA
+#endif
+
+#ifndef MON_ENTITY_CLASS_EXTRA
+#define MON_ENTITY_CLASS_EXTRA
+#endif
+
+#ifndef MON_PORTAL_CLASS_EXTRA
+#define MON_PORTAL_CLASS_EXTRA
+#endif
+
+#ifndef MON_PORTAL_PAIR_CLASS_EXTRA
+#define MON_PORTAL_PAIR_CLASS_EXTRA
 #endif
