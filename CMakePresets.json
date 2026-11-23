@@ -7,7 +7,7 @@
 	"configurePresets": [
 		{
 			"name": "base",
-			"generator": "Visual Studio 17 2022",
+			"generator": "Visual Studio 18 2026",
 			"architecture": "Win32",
 			"toolset": "v143",
 			"binaryDir": "${sourceDir}/out/build/${presetName}",
