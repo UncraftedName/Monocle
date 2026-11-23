@@ -551,6 +551,39 @@ TEST_CASE("Teleport chain results in VAG")
     }
 }
 
+TEST_CASE("Steampipe-specific VAG")
+{
+    // chamber 04 inbounds IL VAG
+
+    for (int i = 0; i < 2; i++) {
+        mon::GameVersion gv = i == 0 ? mon::GameVersion::GV_5135 : mon::GameVersion::GV_9862575;
+        DYNAMIC_SECTION("game version is " << (gv == mon::GameVersion::GV_5135 ? "5135" : "9862575"))
+        {
+            mon::PortalPair pp{
+                {103.167419f, 330.650452f, 255.96875f},
+                {90.f, 28.7593117f, 0.f},
+                {-448.f, 0.03125f, 25.9501991f},
+                {0.f, 90.f, 0.f},
+                mon::PlacementOrder::BLUE_WAS_CLOSED_ORANGE_OPENED,
+                gv,
+            };
+
+            mon::TeleportChainParams params{
+                &pp,
+                mon::Entity::CreatePlayerFromOrigin({112.3395f, 341.753265f, 237.968765f}, true),
+            };
+
+            mon::TeleportChainResult result;
+            mon::GenerateTeleportChain(params, result);
+
+            if (gv == mon::GameVersion::GV_5135)
+                REQUIRE(result.cum_teleports == 1);
+            else
+                REQUIRE(result.cum_teleports == -1);
+        }
+    }
+}
+
 TEST_CASE("Teleport chain results in 5 teleports (cum=1)")
 {
     /*
